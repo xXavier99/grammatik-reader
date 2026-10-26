@@ -55,6 +55,7 @@ export class Session {
   private blankTool: BlankTool;
   private selectTool: SelectTool;
   private underlineTool: UnderlineTool;
+  private lineTool: UnderlineTool;
 
   static async open(handles: RecentBook, host: SessionHost): Promise<Session> {
     // Text boxes are measured on screen; make sure the real font is ready first.
@@ -103,7 +104,8 @@ export class Session {
     this.checkTool = new CheckTool(store, this.textTool);
     this.blankTool = new BlankTool(store, this.editor);
     this.selectTool = new SelectTool(store, this.editor);
-    this.underlineTool = new UnderlineTool(store, this.editor);
+    this.underlineTool = new UnderlineTool(store, this.editor, 'underline');
+    this.lineTool = new UnderlineTool(store, this.editor, 'line');
     this.layer.setTool(this.textTool);
 
     this.toolbar = new Toolbar({
@@ -323,7 +325,7 @@ export class Session {
     this.editor.setMode(m);
     const tools = {
       select: this.selectTool, text: this.textTool, area: this.areaTool, blank: this.blankTool,
-      underline: this.underlineTool, check: this.checkTool,
+      underline: this.underlineTool, line: this.lineTool, check: this.checkTool,
     };
     this.layer.setTool(tools[m]);
     for (const mode of Object.keys(tools)) this.el.classList.remove(`mode-${mode}`);
@@ -392,10 +394,10 @@ export class Session {
     }
   }
 
-  /** The default colour the picker edits: corrections in Check mode, underlines in Underline mode. */
+  /** The default colour the picker edits: corrections in Check mode, lines in Underline / Line mode. */
   private colorSetting(): 'defaultColor' | 'correctionColor' | 'underlineColor' {
     const mode = this.editor.mode;
-    return mode === 'check' ? 'correctionColor' : mode === 'underline' ? 'underlineColor' : 'defaultColor';
+    return mode === 'check' ? 'correctionColor' : mode === 'underline' || mode === 'line' ? 'underlineColor' : 'defaultColor';
   }
 
   /** Lines input: default for new areas, also applied to the selected area. */
@@ -453,7 +455,8 @@ export class Session {
           case 'area': return this.areaTool.deleteSelection();
           case 'blank': return this.blankTool.deleteSelection();
           case 'select':
-          case 'underline': return this.selectTool.deleteSelection();
+          case 'underline':
+          case 'line': return this.selectTool.deleteSelection();
           default: return this.textTool.deleteSelection();
         }
       case 'Enter':
@@ -473,6 +476,10 @@ export class Session {
       case 'u':
       case 'U':
         this.setMode('underline');
+        return true;
+      case 'l':
+      case 'L':
+        this.setMode('line');
         return true;
       case 't':
       case 'T':

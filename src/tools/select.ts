@@ -164,9 +164,12 @@ export class SelectTool implements Tool {
       s.height = `${b - t}px`;
       if (r - l < DRAG_THRESHOLD && b - t < DRAG_THRESHOLD) return;
       const hits: Selection[] = [];
+      const o = overlay.getBoundingClientRect();
       for (const [sel, coll] of ITEM_SELECTORS) {
         for (const n of overlay.querySelectorAll<HTMLElement>(`:scope > ${sel}`)) {
-          const intersects = n.offsetLeft < r && n.offsetLeft + n.offsetWidth > l && n.offsetTop < b && n.offsetTop + n.offsetHeight > t;
+          // Rendered bounds (include rotation, e.g. diagonal lines), in overlay coordinates.
+          const nr = n.getBoundingClientRect();
+          const intersects = nr.left - o.left < r && nr.right - o.left > l && nr.top - o.top < b && nr.bottom - o.top > t;
           if (intersects && !base.some((s) => s.id === n.dataset.id)) hits.push({ page, coll, id: n.dataset.id! });
         }
       }

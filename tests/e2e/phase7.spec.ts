@@ -179,3 +179,36 @@ test('underline: drag over text draws a line along the bottom, select and delete
   await page.keyboard.press('Delete');
   await expect(lines).toHaveCount(0);
 });
+
+test('line: drag from one point to another, Shift snaps, select and delete', async ({ app: page }) => {
+  await openBook(page);
+  await page.keyboard.press('l');
+  // A diagonal line, and one snapped to horizontal with Shift.
+  await dragPage(page, [0.2, 0.2], [0.5, 0.35]);
+  await page.keyboard.down('Shift');
+  await dragPage(page, [0.2, 0.4], [0.6, 0.41]);
+  await page.keyboard.up('Shift');
+  const lines = page.locator(`${p1} .ann-underline:not(.drawing)`);
+  await expect(lines).toHaveCount(2);
+  await page.screenshot({ path: 'test-results/p7-line.png' });
+
+  await page.locator('.pane').focus();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  const doc = JSON.parse((await readFolderFile(page, SIDECAR))!);
+  const ul = doc.pages['1'].underlines as { x: number; y: number; dx: number; dy: number }[];
+  const H = 841.89;
+  const W = 595.28;
+  expect(ul[0].x).toBeCloseTo(0.2 * W, 0);
+  expect(ul[0].y).toBeCloseTo(H * 0.8, 0);
+  expect(ul[0].dx).toBeCloseTo(0.3 * W, 0);
+  expect(ul[0].dy).toBeCloseTo(-0.15 * H, 0);
+  expect(ul[1].dy).toBe(0);
+
+  // Rectangle selection catches the diagonal line by its drawn extent.
+  await page.keyboard.press('v');
+  await dragPage(page, [0.42, 0.28], [0.55, 0.36]);
+  await expect(page.locator(`${p1} .ann-underline.selected`)).toHaveCount(1);
+  await page.keyboard.press('Delete');
+  await expect(lines).toHaveCount(1);
+});

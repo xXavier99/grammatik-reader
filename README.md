@@ -20,6 +20,9 @@ sidecar file next to it (`Book.pdf` → `Book.pdf.annotations.json`).
 - **Underline** (`U`): drag over printed text; a line is drawn along the bottom of the
   dragged rectangle. Click a line and press Delete to remove it, or move it in Select mode.
   In Underline mode the colour picker sets the underline colour. Underlines are always exported.
+- **Line** (`L`): drag from one point to another to draw a straight line (hold Shift to snap
+  to horizontal, vertical or 45°). Lines work like underlines: same colour setting, select,
+  move, delete, always exported.
 - **Blanks** (`B`): for answers scattered through a text. Click where each answer starts,
   in the order you want to fill them; each spot gets a numbered placeholder. Press Enter
   (or click a placeholder in Text mode) to start typing, then Tab / Shift+Tab move to the

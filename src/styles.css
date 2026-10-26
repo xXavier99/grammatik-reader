@@ -887,10 +887,12 @@ body.dragging-resize * {
   background: rgba(37, 99, 235, 0.06);
   pointer-events: none;
 }
-.session.mode-underline .page-overlay {
+.session.mode-underline .page-overlay,
+.session.mode-line .page-overlay {
   cursor: crosshair;
 }
 .session.mode-underline .ann-underline:not(.drawing),
+.session.mode-line .ann-underline:not(.drawing),
 .session.mode-select .ann-underline {
   pointer-events: auto;
   cursor: pointer;
@@ -900,6 +902,9 @@ body.dragging-resize * {
 }
 .session.mode-underline .ann-text,
 .session.mode-underline .ann-mark,
-.session.mode-underline .ann-blank {
+.session.mode-underline .ann-blank,
+.session.mode-line .ann-text,
+.session.mode-line .ann-mark,
+.session.mode-line .ann-blank {
   pointer-events: none;
 }
