@@ -1,5 +1,6 @@
 // An open book: PDF, annotation store, autosave, panes, sidebar, toolbar.
 
+import { exportPdf } from '../export/exportFlow';
 import { lookupAnswerPage, setPageMapping } from '../model/answerKey';
 import { findEntity, updateOp } from '../model/history';
 import { createEmptyDoc } from '../model/schema';
@@ -73,7 +74,7 @@ export class Session {
         });
       }
     }
-    return new Session(book, sidecar, new Store(doc), res.status === 'ok', host);
+    return new Session(book, sidecar, new Store(doc), res.status === 'ok', host, handles);
   }
 
   private constructor(
@@ -82,6 +83,7 @@ export class Session {
     store: Store,
     existsOnDisk: boolean,
     private host: SessionHost,
+    private handles: RecentBook,
   ) {
     this.store = store;
     this.renderer = new Renderer(book);
@@ -117,6 +119,7 @@ export class Session {
       toggleLink: () => this.setLinked(!this.store.doc.answerKey.linked),
       mapPages: () => this.mapPages(),
       answerKey: (anchor) => this.akPanel.toggle(anchor),
+      exportPdf: () => void this.exportPdf(),
     });
     this.toolbar.setFileName(book.name);
 
@@ -424,6 +427,19 @@ export class Session {
       }
     }
     return false;
+  }
+
+  // ---- export ------------------------------------------------------------
+
+  async exportPdf(): Promise<void> {
+    this.textTool.finishEditing();
+    await exportPdf({
+      pdfName: this.book.name,
+      fileHandle: this.handles.fileHandle,
+      dirHandle: this.handles.dirHandle,
+      doc: this.store.doc,
+      geoms: this.book.geoms,
+    });
   }
 
   // ---- saving ------------------------------------------------------------

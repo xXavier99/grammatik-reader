@@ -20,6 +20,7 @@ export interface ToolbarActions {
   toggleLink(): void;
   mapPages(): void;
   answerKey(anchor: HTMLElement): void;
+  exportPdf(): void;
   goToPage(page: number): void;
   prevPage(): void;
   nextPage(): void;
@@ -158,7 +159,7 @@ export class Toolbar {
       el('div', { class: 'group' }, this.splitBtn, keyBtn),
       this.splitExtras,
       el('div', { class: 'spacer' }),
-      el('div', { class: 'group' }, this.status, button('?', 'Keyboard shortcuts (?)', () => a.help(), 'icon')),
+      el('div', { class: 'group' }, button('Export', 'Export a copy of the PDF with your answers', () => a.exportPdf()), this.status, button('?', 'Keyboard shortcuts (?)', () => a.help(), 'icon')),
     );
   }
 

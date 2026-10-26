@@ -21,9 +21,16 @@ async function installStubs(page: Page) {
     };
     const w = window as unknown as Record<string, unknown>;
     w.__testFolder = folder;
+    // Tests can set window.__openName to "pick" another file in the folder.
     w.showOpenFilePicker = async () => {
       const dir = await folder();
-      return [await dir.getFileHandle(pdfName)];
+      return [await dir.getFileHandle((w.__openName as string | undefined) ?? pdfName)];
+    };
+    w.showSaveFilePicker = async (opts: { suggestedName?: string }) => {
+      const dir = await folder();
+      const name = opts?.suggestedName ?? 'export.pdf';
+      w.__savedAs = name;
+      return dir.getFileHandle(name, { create: true });
     };
     // Return the parent ("GoogleDrive") to exercise the "ancestor folder" path.
     w.showDirectoryPicker = async () => {
@@ -55,6 +62,15 @@ export async function readFolderFile(page: Page, name: string): Promise<string |
       return null;
     }
   }, name);
+}
+
+export async function readFolderBytes(page: Page, name: string): Promise<Uint8Array> {
+  const data = await page.evaluate(async (n) => {
+    const dir = await (window as any).__testFolder();
+    const buf = await (await (await dir.getFileHandle(n)).getFile()).arrayBuffer();
+    return Array.from(new Uint8Array(buf));
+  }, name);
+  return new Uint8Array(data);
 }
 
 export async function writeFolderFile(page: Page, name: string, text: string) {
