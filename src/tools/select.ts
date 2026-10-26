@@ -1,4 +1,4 @@
-// Select mode: pick text boxes, ✓/✗ marks and blanks to move or delete them.
+// Select mode: pick text boxes, ✓/✗ marks, blanks and underlines to move or delete them.
 // Click selects one item, Shift/Ctrl+click adds or removes it, dragging on
 // empty space selects everything the rectangle touches, dragging a selected
 // item moves the whole selection. Delete removes it.
@@ -19,6 +19,7 @@ const ITEM_SELECTORS: [string, Collection][] = [
   ['.ann-text[data-id]', 'texts'],
   ['.ann-mark', 'marks'],
   ['.ann-blank:not(.filled)', 'blanks'],
+  ['.ann-underline', 'underlines'],
 ];
 
 function itemAt(target: HTMLElement): { node: HTMLElement; coll: Collection } | null {

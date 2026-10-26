@@ -17,13 +17,16 @@ sidecar file next to it (`Book.pdf` → `Book.pdf.annotations.json`).
   the printed line under the last row. The rows follow the printed lines, and you go
   straight into typing in the first row. The area's row spacing is remembered, so for
   the next block you only need to click its first row and press Enter.
+- **Underline** (`U`): drag over printed text; a line is drawn along the bottom of the
+  dragged rectangle. Click a line and press Delete to remove it, or move it in Select mode.
+  In Underline mode the colour picker sets the underline colour. Underlines are always exported.
 - **Blanks** (`B`): for answers scattered through a text. Click where each answer starts,
   in the order you want to fill them; each spot gets a numbered placeholder. Press Enter
   (or click a placeholder in Text mode) to start typing, then Tab / Shift+Tab move to the
   next / previous blank in that order. In Text mode a click near a placeholder snaps to it.
   In Blanks mode, drag a placeholder to move it or press Delete to remove it. Placeholders
   are never exported.
-- **Select** (`V`): click a text box, ✓/✗ mark or placeholder to select it, Shift+click to
+- **Select** (`V`): click a text box, ✓/✗ mark, underline or placeholder to select it, Shift+click to
   add more, or drag a rectangle on empty space to select everything it touches. Drag a
   selected item to move the whole selection; Delete removes it (a mark takes its correction
   with it). Enter edits the selected text box.
@@ -108,7 +111,7 @@ Avoid editing on both computers at the same time: Drive may then create a
 
 JSON, `"version": 1`. All positions are in PDF user-space units (points, origin bottom-left),
 so they don't depend on zoom and are used as-is for export. Contents: `pages` (text boxes,
-answer areas, ✓/✗ marks and blanks per page), `settings` (default font size, colours, area lines,
+answer areas, ✓/✗ marks, blanks and underlines per page), `settings` (default font size, colours, area lines,
 remembered row spacing), `answerKey` (answer section start, link toggle, mapping table),
 and `view` (last page, zoom, split layout).
 
@@ -129,7 +132,7 @@ and `view` (last page, zoom, split layout).
 ```
 src/pdf/       PDF loading (pdf.js, local worker), page geometry, layout maths, render queue + cache
 src/model/     document schema + migration, store, undo/redo, coordinate transforms, row maths
-src/tools/     select, text, answer-area, blanks and check-mode tools
+src/tools/     select, text, answer-area, underline, blanks and check-mode tools
 src/ui/        app shell, toolbar, sidebar, panes, split view, answer-key panel, dialogs
 src/storage/   file handles (IndexedDB), sidecar read/write, autosave + conflict detection
 src/export/    PDF export with pdf-lib (embeds the bundled Noto Sans, SIL OFL)

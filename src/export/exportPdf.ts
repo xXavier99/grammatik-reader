@@ -5,7 +5,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { degrees, LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { makeViewport, pdfToScreen, screenToPdf, type PageGeom, type Viewport } from '../model/coords';
 import { MARK_COLORS, MARK_PATHS, MARK_STROKE } from '../model/marks';
-import type { Mark, SidecarDoc, TextBox } from '../model/schema';
+import type { Mark, SidecarDoc, TextBox, Underline } from '../model/schema';
 import { baselineOffset, boxLines } from './layout';
 
 export interface ExportOptions {
@@ -38,6 +38,7 @@ export async function buildAnnotatedPdf(input: ExportInput): Promise<Uint8Array>
     if (!page || !geom) continue;
     // Scale 1: one "screen" unit = one PDF unit, laid out as the reader sees the page.
     const vp = makeViewport(geom, 1);
+    for (const u of pa.underlines) drawUnderline(page, u);
     for (const tb of pa.texts) {
       if (tb.kind === 'correction' && !input.options.includeChecks) continue;
       drawTextBox(page, font, vp, tb, input.baselineRatio);
@@ -84,6 +85,15 @@ function drawMark(page: PDFPage, vp: Viewport, m: Mark): void {
       });
     }
   }
+}
+
+function drawUnderline(page: PDFPage, u: Underline): void {
+  page.drawLine({
+    start: { x: u.x, y: u.y },
+    end: { x: u.x + u.dx, y: u.y + u.dy },
+    thickness: u.width,
+    color: hexToRgb(u.color),
+  });
 }
 
 function hexToRgb(hex: string) {

@@ -95,7 +95,7 @@ test('blanks: place in order, Tab through them, magnet click', async ({ app: pag
 
 test('select mode: rectangle select, move, delete, undo', async ({ app: page }) => {
   await openBook(page);
-  for (const [fy, text] of [[0.2, 'eins'], [0.25, 'zwei'], [0.5, 'drei']] as const) {
+  for (const [fy, text] of [[0.2, 'eins'], [0.25, 'zwei'], [0.4, 'drei']] as const) {
     await clickPage(page, 0.3, fy);
     await page.keyboard.type(text);
     await page.keyboard.press('Escape');
@@ -137,4 +137,45 @@ test('select mode: rectangle select, move, delete, undo', async ({ app: page }) 
   await page.keyboard.type('?');
   await page.keyboard.press('Escape');
   await expect(boxes(page).filter({ hasText: 'drei?' })).toHaveCount(1);
+});
+
+test('underline: drag over text draws a line along the bottom, select and delete', async ({ app: page }) => {
+  await openBook(page);
+  await page.keyboard.press('u');
+  // Drag from top-left to bottom-right, and once backwards (right to left, bottom to top).
+  await dragPage(page, [0.15, 0.18], [0.4, 0.2]);
+  await dragPage(page, [0.6, 0.3], [0.45, 0.28]);
+  // A plain click draws nothing.
+  await clickPage(page, 0.5, 0.5);
+  const lines = page.locator(`${p1} .ann-underline:not(.drawing)`);
+  await expect(lines).toHaveCount(2);
+  await page.screenshot({ path: 'test-results/p7-underline.png' });
+
+  await page.locator('.pane').focus();
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('.save-status')).toHaveText('Saved');
+  const doc = JSON.parse((await readFolderFile(page, SIDECAR))!);
+  const ul = doc.pages['1'].underlines as { x: number; y: number; dx: number; dy: number }[];
+  const H = 841.89;
+  const W = 595.28;
+  expect(ul[0].x).toBeCloseTo(0.15 * W, 0);
+  expect(ul[0].y).toBeCloseTo(H * (1 - 0.2), 0);
+  expect(ul[0].dx).toBeCloseTo(0.25 * W, 0);
+  expect(ul[0].dy).toBe(0);
+  expect(ul[1].x).toBeCloseTo(0.45 * W, 0);
+  expect(ul[1].y).toBeCloseTo(H * (1 - 0.3), 0);
+
+  // Click selects a line, Delete removes it, undo restores.
+  await lines.first().click();
+  await expect(page.locator(`${p1} .ann-underline.selected`)).toHaveCount(1);
+  await page.keyboard.press('Delete');
+  await expect(lines).toHaveCount(1);
+  await page.keyboard.press('Control+z');
+  await expect(lines).toHaveCount(2);
+  // Select mode: rectangle selects both, Delete removes them.
+  await page.keyboard.press('v');
+  await dragPage(page, [0.1, 0.15], [0.7, 0.35]);
+  await expect(page.locator(`${p1} .ann-underline.selected`)).toHaveCount(2);
+  await page.keyboard.press('Delete');
+  await expect(lines).toHaveCount(0);
 });

@@ -7,6 +7,8 @@
 export const SCHEMA_VERSION = 1;
 export const APP_ID = 'grammatik-reader';
 export const MAX_AREA_LINES = 100;
+/** Thickness of new underlines, in PDF units. */
+export const UNDERLINE_WIDTH = 1.2;
 
 export type Id = string;
 
@@ -66,19 +68,34 @@ export interface Blank {
   y: number;
 }
 
+/**
+ * A straight line under some printed text: from (x, y) to (x + dx, y + dy),
+ * `width` PDF units thick. Drawn horizontally as the reader sees the page.
+ */
+export interface Underline {
+  id: Id;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  width: number;
+  color: string;
+}
+
 export interface PageAnnotations {
   texts: TextBox[];
   areas: AnswerArea[];
   marks: Mark[];
   blanks: Blank[];
+  underlines: Underline[];
 }
 
 export function emptyPage(): PageAnnotations {
-  return { texts: [], areas: [], marks: [], blanks: [] };
+  return { texts: [], areas: [], marks: [], blanks: [], underlines: [] };
 }
 
 export function isPageEmpty(pa: PageAnnotations): boolean {
-  return !pa.texts.length && !pa.areas.length && !pa.marks.length && !pa.blanks.length;
+  return !pa.texts.length && !pa.areas.length && !pa.marks.length && !pa.blanks.length && !pa.underlines.length;
 }
 
 /** Exercise pages fromPage..toPage (1-based, inclusive) → answer page. */
@@ -103,6 +120,7 @@ export interface SidecarDoc {
     defaultFontSize: number;
     defaultColor: string;
     correctionColor: string;
+    underlineColor: string;
     markSize: number;
     /** Line count for newly drawn answer areas. */
     areaLines: number;
@@ -141,6 +159,7 @@ export function createEmptyDoc(pdfName: string, pageCount: number, fingerprint: 
       defaultFontSize: 11,
       defaultColor: '#1a4fd6',
       correctionColor: '#d11a2a',
+      underlineColor: '#1a4fd6',
       markSize: 14,
       areaLines: 2,
       lineSpacing: null,
@@ -200,6 +219,7 @@ export function migrate(raw: unknown, pdfName: string, pageCount: number, finger
   doc.settings.defaultFontSize = num(s.defaultFontSize, base.settings.defaultFontSize, 4, 96);
   doc.settings.defaultColor = color(s.defaultColor, base.settings.defaultColor);
   doc.settings.correctionColor = color(s.correctionColor, base.settings.correctionColor);
+  doc.settings.underlineColor = color(s.underlineColor, base.settings.underlineColor);
   doc.settings.markSize = num(s.markSize, base.settings.markSize, 4, 96);
   doc.settings.areaLines = Math.round(num(s.areaLines, base.settings.areaLines, 1, MAX_AREA_LINES));
   doc.settings.lineSpacing = isNum(s.lineSpacing) && s.lineSpacing > 0 ? Math.min(500, s.lineSpacing) : null;
@@ -267,6 +287,11 @@ export function migrate(raw: unknown, pdfName: string, pageCount: number, finger
       if (blank) pa.blanks.push(blank);
       else warnings.push(`Dropped an invalid blank on page ${pageNo}.`);
     }
+    for (const u of arr(value.underlines)) {
+      const line = parseUnderline(u);
+      if (line) pa.underlines.push(line);
+      else warnings.push(`Dropped an invalid underline on page ${pageNo}.`);
+    }
     if (!isPageEmpty(pa)) doc.pages[String(pageNo)] = pa;
   }
 
@@ -316,6 +341,13 @@ function parseMark(m: unknown): Mark | null {
 function parseBlank(b: unknown): Blank | null {
   if (!isObj(b) || typeof b.id !== 'string' || !isNum(b.x) || !isNum(b.y)) return null;
   return { id: b.id, x: b.x, y: b.y };
+}
+
+function parseUnderline(u: unknown): Underline | null {
+  if (!isObj(u) || typeof u.id !== 'string') return null;
+  if (!isNum(u.x) || !isNum(u.y) || !isNum(u.dx) || !isNum(u.dy)) return null;
+  if (u.dx === 0 && u.dy === 0) return null;
+  return { id: u.id, x: u.x, y: u.y, dx: u.dx, dy: u.dy, width: num(u.width, UNDERLINE_WIDTH, 0.25, 10), color: color(u.color, '#1a4fd6') };
 }
 
 type Obj = Record<string, unknown>;

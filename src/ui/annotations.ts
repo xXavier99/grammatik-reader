@@ -6,7 +6,7 @@ import { blankRect, boxForBlank } from '../model/blanks';
 import { pdfToScreen, type Viewport } from '../model/coords';
 import { getPage } from '../model/history';
 import { MARK_COLORS, MARK_PATHS, MARK_STROKE } from '../model/marks';
-import type { AnswerArea, Blank, Mark, TextBox } from '../model/schema';
+import type { AnswerArea, Blank, Mark, TextBox, Underline } from '../model/schema';
 import type { Store } from '../model/store';
 import { LINE_HEIGHT, TEXT_FONT_FAMILY } from '../model/text';
 import type { EditorState } from '../tools/editor';
@@ -123,6 +123,7 @@ export class AnnotationLayer implements PageDecorator {
     }
     for (const n of existing.values()) n.remove();
     this.renderBlanks(view, pa?.blanks ?? [], texts, ctx.vp);
+    this.renderUnderlines(view, pa?.underlines ?? [], ctx.vp);
     this.renderMarks(view, pa?.marks ?? [], ctx.vp);
     this.tool?.afterRender?.(ctx);
   }
@@ -145,6 +146,22 @@ export class AnnotationLayer implements PageDecorator {
       s.top = `${sy - px / 2}px`;
       s.width = s.height = `${px}px`;
       node.classList.toggle('selected', this.editor.isSelected(m.id));
+    }
+    for (const n of existing.values()) n.remove();
+  }
+
+  private renderUnderlines(view: PageView, lines: Underline[], vp: Viewport): void {
+    const existing = new Map<string, HTMLElement>();
+    for (const n of view.overlay.querySelectorAll<HTMLElement>(':scope > .ann-underline')) existing.set(n.dataset.id!, n);
+    for (const u of lines) {
+      let node = existing.get(u.id);
+      existing.delete(u.id);
+      if (!node) {
+        node = el('div', { class: 'ann-underline', 'data-id': u.id }, el('span', { class: 'ann-underline-bar' }));
+        view.overlay.appendChild(node);
+      }
+      placeUnderline(node, vp, u);
+      node.classList.toggle('selected', this.editor.isSelected(u.id));
     }
     for (const n of existing.values()) n.remove();
   }
@@ -222,6 +239,28 @@ function createMarkNode(m: Mark): HTMLElement {
   });
   node.appendChild(svg);
   return node;
+}
+
+/**
+ * Positions an underline node: a horizontal strip (tall enough to click)
+ * from the start point, rotated to the line's on-screen direction.
+ */
+export function placeUnderline(node: HTMLElement, vp: Viewport, u: Pick<Underline, 'x' | 'y' | 'dx' | 'dy' | 'width' | 'color'>): void {
+  const [x1, y1] = pdfToScreen(vp, u.x, u.y);
+  const [x2, y2] = pdfToScreen(vp, u.x + u.dx, u.y + u.dy);
+  const thick = Math.max(1, u.width * vp.scale);
+  const hit = Math.max(10, thick);
+  const s = node.style;
+  s.left = `${x1}px`;
+  s.top = `${y1 - hit / 2}px`;
+  s.width = `${Math.hypot(x2 - x1, y2 - y1)}px`;
+  s.height = `${hit}px`;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  s.transform = Math.abs(angle) > 1e-3 ? `rotate(${angle}rad)` : '';
+  const bar = (node.firstElementChild as HTMLElement).style;
+  bar.height = `${thick}px`;
+  bar.marginTop = `${-thick / 2}px`;
+  bar.background = u.color;
 }
 
 export const AREA_HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;

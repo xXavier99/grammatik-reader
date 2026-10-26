@@ -18,6 +18,7 @@ import { BlankTool } from '../tools/blank';
 import { CheckTool } from '../tools/check';
 import { SelectTool } from '../tools/select';
 import { TextTool } from '../tools/text';
+import { UnderlineTool } from '../tools/underline';
 import { AnnotationLayer } from './annotations';
 import { AnswerKeyPanel } from './answerKeyPanel';
 import { showDialog, toast } from './dialogs';
@@ -53,6 +54,7 @@ export class Session {
   private checkTool: CheckTool;
   private blankTool: BlankTool;
   private selectTool: SelectTool;
+  private underlineTool: UnderlineTool;
 
   static async open(handles: RecentBook, host: SessionHost): Promise<Session> {
     // Text boxes are measured on screen; make sure the real font is ready first.
@@ -101,6 +103,7 @@ export class Session {
     this.checkTool = new CheckTool(store, this.textTool);
     this.blankTool = new BlankTool(store, this.editor);
     this.selectTool = new SelectTool(store, this.editor);
+    this.underlineTool = new UnderlineTool(store, this.editor);
     this.layer.setTool(this.textTool);
 
     this.toolbar = new Toolbar({
@@ -318,7 +321,10 @@ export class Session {
   setMode(m: Mode): void {
     this.textTool.finishEditing();
     this.editor.setMode(m);
-    const tools = { select: this.selectTool, text: this.textTool, area: this.areaTool, blank: this.blankTool, check: this.checkTool };
+    const tools = {
+      select: this.selectTool, text: this.textTool, area: this.areaTool, blank: this.blankTool,
+      underline: this.underlineTool, check: this.checkTool,
+    };
     this.layer.setTool(tools[m]);
     for (const mode of Object.keys(tools)) this.el.classList.remove(`mode-${mode}`);
     this.el.classList.add(`mode-${m}`);
@@ -367,17 +373,29 @@ export class Session {
    * also applied to the selected box, if any.
    */
   private applyTextStyle(patch: { fontSize?: number; color?: string }): void {
-    // In Check mode the colour picker sets the colour of corrections.
-    const colorKey = this.editor.mode === 'check' ? 'correctionColor' : 'defaultColor';
+    const colorKey = this.colorSetting();
     this.store.setSettings({
       ...(patch.fontSize ? { defaultFontSize: patch.fontSize } : {}),
       ...(patch.color ? { [colorKey]: patch.color } : {}),
     });
-    const texts = this.editor.selected.filter((s) => s.coll === 'texts' && findEntity(this.store.doc, s.page, 'texts', s.id));
-    if (texts.length) {
-      const key = patch.color ? `color:${texts.map((s) => s.id).join(',')}` : undefined; // Colour picker drags fire many events.
-      this.store.change('Change text style', texts.map((s) => updateOp(this.store.doc, s.page, 'texts', s.id, patch)), key);
+    const items = this.editor.selected.filter(
+      (s) => (s.coll === 'texts' || (s.coll === 'underlines' && patch.color)) && findEntity(this.store.doc, s.page, s.coll, s.id),
+    );
+    if (items.length) {
+      const key = patch.color ? `color:${items.map((s) => s.id).join(',')}` : undefined; // Colour picker drags fire many events.
+      const ops = items.map((s) =>
+        s.coll === 'texts'
+          ? updateOp(this.store.doc, s.page, 'texts', s.id, patch)
+          : updateOp(this.store.doc, s.page, 'underlines', s.id, { color: patch.color }),
+      );
+      this.store.change('Change style', ops, key);
     }
+  }
+
+  /** The default colour the picker edits: corrections in Check mode, underlines in Underline mode. */
+  private colorSetting(): 'defaultColor' | 'correctionColor' | 'underlineColor' {
+    const mode = this.editor.mode;
+    return mode === 'check' ? 'correctionColor' : mode === 'underline' ? 'underlineColor' : 'defaultColor';
   }
 
   /** Lines input: default for new areas, also applied to the selected area. */
@@ -390,10 +408,11 @@ export class Session {
     const sel = this.editor.selection;
     const area = sel?.coll === 'areas' ? findEntity(this.store.doc, sel.page, 'areas', sel.id) : undefined;
     this.toolbar.setLines(area ? area.lines : this.store.doc.settings.areaLines);
-    const tb = sel ? findEntity(this.store.doc, sel.page, 'texts', sel.id) : undefined;
+    const tb = sel?.coll === 'texts' ? findEntity(this.store.doc, sel.page, 'texts', sel.id) : undefined;
+    const ul = sel?.coll === 'underlines' ? findEntity(this.store.doc, sel.page, 'underlines', sel.id) : undefined;
     const s = this.store.doc.settings;
     if (tb) this.toolbar.setTextStyle(tb.fontSize, tb.color);
-    else this.toolbar.setTextStyle(s.defaultFontSize, this.editor.mode === 'check' ? s.correctionColor : s.defaultColor);
+    else this.toolbar.setTextStyle(s.defaultFontSize, ul ? ul.color : s[this.colorSetting()]);
   }
 
   private afterContentChange(source?: 'undo' | 'redo'): void {
@@ -433,7 +452,8 @@ export class Session {
         switch (this.editor.mode) {
           case 'area': return this.areaTool.deleteSelection();
           case 'blank': return this.blankTool.deleteSelection();
-          case 'select': return this.selectTool.deleteSelection();
+          case 'select':
+          case 'underline': return this.selectTool.deleteSelection();
           default: return this.textTool.deleteSelection();
         }
       case 'Enter':
@@ -449,6 +469,10 @@ export class Session {
       case 'b':
       case 'B':
         this.setMode('blank');
+        return true;
+      case 'u':
+      case 'U':
+        this.setMode('underline');
         return true;
       case 't':
       case 'T':

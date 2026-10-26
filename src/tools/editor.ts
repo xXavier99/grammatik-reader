@@ -2,7 +2,7 @@
 
 import type { Collection } from '../model/history';
 
-export type Mode = 'select' | 'text' | 'area' | 'blank' | 'check';
+export type Mode = 'select' | 'text' | 'area' | 'blank' | 'underline' | 'check';
 
 export interface Selection {
   page: number;

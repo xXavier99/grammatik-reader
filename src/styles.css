@@ -864,3 +864,42 @@ body.dragging-resize * {
   pointer-events: none;
   z-index: 4;
 }
+
+/* ---- underlines ---- */
+.ann-underline {
+  position: absolute;
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+.ann-underline-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+}
+.ann-underline.selected {
+  outline: 1px dashed rgba(37, 99, 235, 0.8);
+  outline-offset: 1px;
+}
+.underline-band {
+  position: absolute;
+  border: 1px dashed rgba(37, 99, 235, 0.6);
+  background: rgba(37, 99, 235, 0.06);
+  pointer-events: none;
+}
+.session.mode-underline .page-overlay {
+  cursor: crosshair;
+}
+.session.mode-underline .ann-underline:not(.drawing),
+.session.mode-select .ann-underline {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.session.mode-select .ann-underline {
+  cursor: move;
+}
+.session.mode-underline .ann-text,
+.session.mode-underline .ann-mark,
+.session.mode-underline .ann-blank {
+  pointer-events: none;
+}

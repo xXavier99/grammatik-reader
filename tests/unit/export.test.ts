@@ -73,8 +73,9 @@ describe('buildAnnotatedPdf', () => {
       areas: [{ id: 'z', x: 0, y: 800, width: 100, height: 50, lines: 2, fontSize: 11 }],
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
       blanks: [],
+      underlines: [],
     };
-    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [], blanks: [] };
+    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [], blanks: [], underlines: [] };
     const geoms: PageGeom[] = [
       { view: [0, 0, 595, 842], rotation: 0 },
       { view: [0, 0, 595, 842], rotation: 90 },
@@ -109,6 +110,7 @@ describe('buildAnnotatedPdf', () => {
       areas: [{ id: 'z', x: 0, y: 800, width: 100, height: 50, lines: 2, fontSize: 11 }],
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
       blanks: [{ id: 'k', x: 120, y: 600 }],
+      underlines: [],
     };
     const geoms: PageGeom[] = [{ view: [0, 0, 595, 842], rotation: 0 }, { view: [0, 0, 595, 842], rotation: 90 }];
     const without = await buildAnnotatedPdf({
@@ -119,6 +121,25 @@ describe('buildAnnotatedPdf', () => {
       original: await source(), doc, geoms, fontBytes: font, baselineRatio: RATIO, options: { includeChecks: true },
     });
     expect(withChecks.length).toBeGreaterThan(without.length); // the ✗ strokes
+  });
+
+  it('draws underlines, with or without marks', async () => {
+    const geoms: PageGeom[] = [{ view: [0, 0, 595, 842], rotation: 0 }, { view: [0, 0, 595, 842], rotation: 90 }];
+    const doc = createEmptyDoc('Book.pdf', 2, null);
+    doc.pages['1'] = {
+      texts: [], areas: [], marks: [], blanks: [],
+      underlines: [{ id: 'u', x: 100, y: 600, dx: 150, dy: 0, width: 1.2, color: '#1a4fd6' }],
+    };
+    const bytes = await buildAnnotatedPdf({
+      original: await source(), doc, geoms, fontBytes: font, baselineRatio: RATIO, options: { includeChecks: false },
+    });
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdf = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+    const ops = await (await pdf.getPage(1)).getOperatorList();
+    // One stroke colour set and one stroked path: the underline.
+    expect(ops.fnArray.filter((fn: number) => fn === pdfjs.OPS.setStrokeRGBColor)).toHaveLength(1);
+    expect(ops.fnArray.filter((fn: number) => fn === pdfjs.OPS.stroke || fn === pdfjs.OPS.constructPath).length).toBeGreaterThan(0);
+    await pdf.destroy();
   });
 
   it('does not modify the source bytes', async () => {
