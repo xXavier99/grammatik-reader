@@ -14,7 +14,9 @@ import type { RecentBook } from '../storage/handles';
 import { SidecarFile } from '../storage/sidecar';
 import { EditorState, type Mode } from '../tools/editor';
 import { AreaTool } from '../tools/area';
+import { BlankTool } from '../tools/blank';
 import { CheckTool } from '../tools/check';
+import { SelectTool } from '../tools/select';
 import { TextTool } from '../tools/text';
 import { AnnotationLayer } from './annotations';
 import { AnswerKeyPanel } from './answerKeyPanel';
@@ -49,6 +51,8 @@ export class Session {
   private textTool: TextTool;
   private areaTool: AreaTool;
   private checkTool: CheckTool;
+  private blankTool: BlankTool;
+  private selectTool: SelectTool;
 
   static async open(handles: RecentBook, host: SessionHost): Promise<Session> {
     // Text boxes are measured on screen; make sure the real font is ready first.
@@ -95,6 +99,8 @@ export class Session {
       this.textTool.enterArea(ctx, area);
     });
     this.checkTool = new CheckTool(store, this.textTool);
+    this.blankTool = new BlankTool(store, this.editor);
+    this.selectTool = new SelectTool(store, this.editor);
     this.layer.setTool(this.textTool);
 
     this.toolbar = new Toolbar({
@@ -312,10 +318,38 @@ export class Session {
   setMode(m: Mode): void {
     this.textTool.finishEditing();
     this.editor.setMode(m);
-    this.layer.setTool(m === 'area' ? this.areaTool : m === 'check' ? this.checkTool : this.textTool);
-    this.el.classList.remove('mode-text', 'mode-area', 'mode-check');
+    const tools = { select: this.selectTool, text: this.textTool, area: this.areaTool, blank: this.blankTool, check: this.checkTool };
+    this.layer.setTool(tools[m]);
+    for (const mode of Object.keys(tools)) this.el.classList.remove(`mode-${mode}`);
     this.el.classList.add(`mode-${m}`);
     this.toolbar.setMode(m);
+  }
+
+  /** Switches to Text mode and edits the box, or types into the blank, `sel` in the focused pane. */
+  private typeInto(sel: { page: number; coll: 'texts' | 'blanks'; id: string }): boolean {
+    const view = [...this.focusedPane.pageViews].find((v) => v.pageNo === sel.page);
+    const blank = sel.coll === 'blanks' ? findEntity(this.store.doc, sel.page, 'blanks', sel.id) : undefined;
+    if (!view || (sel.coll === 'blanks' && !blank)) return false;
+    this.setMode('text');
+    const ctx = this.layer.ctx(this.focusedPane, view);
+    if (blank) this.textTool.enterBlank(ctx, blank);
+    else this.textTool.startEditing(ctx, sel.id, null);
+    return true;
+  }
+
+  /** Enter: edit the selected box (Text / Select mode) or start typing in a blank (Blanks mode). */
+  private enterKey(): boolean {
+    const mode = this.editor.mode;
+    if (mode === 'text') return this.textTool.editSelection(this.focusedPane);
+    if (mode === 'select') {
+      const sel = this.editor.selection;
+      return sel?.coll === 'texts' ? this.typeInto({ ...sel, coll: 'texts' }) : false;
+    }
+    if (mode === 'blank') {
+      const target = this.blankTool.blankToFill(this.focusedPane);
+      return target ? this.typeInto({ page: target.page, coll: 'blanks', id: target.blank.id }) : false;
+    }
+    return false;
   }
 
   undo(): void {
@@ -339,10 +373,10 @@ export class Session {
       ...(patch.fontSize ? { defaultFontSize: patch.fontSize } : {}),
       ...(patch.color ? { [colorKey]: patch.color } : {}),
     });
-    const sel = this.editor.selection;
-    if (sel && findEntity(this.store.doc, sel.page, 'texts', sel.id)) {
-      const key = patch.color ? `color:${sel.id}` : undefined; // Colour picker drags fire many events.
-      this.store.change('Change text style', [updateOp(this.store.doc, sel.page, 'texts', sel.id, patch)], key);
+    const texts = this.editor.selected.filter((s) => s.coll === 'texts' && findEntity(this.store.doc, s.page, 'texts', s.id));
+    if (texts.length) {
+      const key = patch.color ? `color:${texts.map((s) => s.id).join(',')}` : undefined; // Colour picker drags fire many events.
+      this.store.change('Change text style', texts.map((s) => updateOp(this.store.doc, s.page, 'texts', s.id, patch)), key);
     }
   }
 
@@ -363,8 +397,9 @@ export class Session {
   }
 
   private afterContentChange(source?: 'undo' | 'redo'): void {
-    const sel = this.editor.selection;
-    if (sel && !findEntity(this.store.doc, sel.page, sel.coll, sel.id)) this.editor.select(null);
+    const selected = this.editor.selected;
+    const alive = selected.filter((s) => findEntity(this.store.doc, s.page, s.coll, s.id));
+    if (alive.length !== selected.length) this.editor.selectMany(alive);
     this.toolbar.setUndoState(this.store.history.canUndo, this.store.history.canRedo);
     this.syncStyleControls();
     this.syncSplitUi();
@@ -395,12 +430,25 @@ export class Session {
     switch (e.key) {
       case 'Delete':
       case 'Backspace':
-        return this.editor.mode === 'area' ? this.areaTool.deleteSelection() : this.textTool.deleteSelection();
+        switch (this.editor.mode) {
+          case 'area': return this.areaTool.deleteSelection();
+          case 'blank': return this.blankTool.deleteSelection();
+          case 'select': return this.selectTool.deleteSelection();
+          default: return this.textTool.deleteSelection();
+        }
       case 'Enter':
-        return this.editor.mode === 'text' && this.textTool.editSelection(this.focusedPane);
+        return this.enterKey();
       case 'Escape':
-        if (!this.editor.selection) return false;
+        if (!this.editor.selected.length) return false;
         this.editor.select(null);
+        return true;
+      case 'v':
+      case 'V':
+        this.setMode('select');
+        return true;
+      case 'b':
+      case 'B':
+        this.setMode('blank');
         return true;
       case 't':
       case 'T':

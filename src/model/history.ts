@@ -3,12 +3,13 @@
 // Entities are treated as immutable values: a mutation stores full before /
 // after snapshots, so undo is just applying the mutation backwards.
 
-import type { AnswerArea, Mark, PageAnnotations, SidecarDoc, TextBox } from './schema';
+import { emptyPage, isPageEmpty, type AnswerArea, type Blank, type Mark, type PageAnnotations, type SidecarDoc, type TextBox } from './schema';
 
 export interface CollectionTypes {
   texts: TextBox;
   areas: AnswerArea;
   marks: Mark;
+  blanks: Blank;
 }
 export type Collection = keyof CollectionTypes;
 export type Entity = CollectionTypes[Collection];
@@ -36,7 +37,7 @@ export function getPage(doc: SidecarDoc, page: number, create = false): PageAnno
   const key = String(page);
   let pa = doc.pages[key];
   if (!pa && create) {
-    pa = { texts: [], areas: [], marks: [] };
+    pa = emptyPage();
     doc.pages[key] = pa;
   }
   return pa;
@@ -62,7 +63,7 @@ export function applyMutation(doc: SidecarDoc, m: Mutation, backward = false): v
     if (!backward) m.index = i;
     list.splice(i, 1);
   }
-  if (!pa.texts.length && !pa.areas.length && !pa.marks.length) delete doc.pages[String(m.page)];
+  if (isPageEmpty(pa)) delete doc.pages[String(m.page)];
 }
 
 export function applyTransaction(doc: SidecarDoc, tx: Transaction, backward = false): void {

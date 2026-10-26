@@ -26,6 +26,8 @@ export interface TextBox {
   lineIndex?: number;
   /** For corrections: the ✗ mark this correction belongs to. */
   markId?: Id;
+  /** Set when the box was typed into a blank (placeholder). */
+  blankId?: Id;
 }
 
 /**
@@ -53,10 +55,30 @@ export interface Mark {
   size: number;
 }
 
+/**
+ * A placeholder where an answer goes (see model/blanks.ts). (x, y) is where
+ * the text starts: the left edge, vertically centred on the first line.
+ * Order in the page's list is the order Tab walks through them.
+ */
+export interface Blank {
+  id: Id;
+  x: number;
+  y: number;
+}
+
 export interface PageAnnotations {
   texts: TextBox[];
   areas: AnswerArea[];
   marks: Mark[];
+  blanks: Blank[];
+}
+
+export function emptyPage(): PageAnnotations {
+  return { texts: [], areas: [], marks: [], blanks: [] };
+}
+
+export function isPageEmpty(pa: PageAnnotations): boolean {
+  return !pa.texts.length && !pa.areas.length && !pa.marks.length && !pa.blanks.length;
 }
 
 /** Exercise pages fromPage..toPage (1-based, inclusive) → answer page. */
@@ -224,7 +246,7 @@ export function migrate(raw: unknown, pdfName: string, pageCount: number, finger
       continue;
     }
     if (!isObj(value)) continue;
-    const pa: PageAnnotations = { texts: [], areas: [], marks: [] };
+    const pa = emptyPage();
     for (const t of arr(value.texts)) {
       const tb = parseText(t);
       if (tb) pa.texts.push(tb);
@@ -240,7 +262,12 @@ export function migrate(raw: unknown, pdfName: string, pageCount: number, finger
       if (mark) pa.marks.push(mark);
       else warnings.push(`Dropped an invalid mark on page ${pageNo}.`);
     }
-    if (pa.texts.length || pa.areas.length || pa.marks.length) doc.pages[String(pageNo)] = pa;
+    for (const b of arr(value.blanks)) {
+      const blank = parseBlank(b);
+      if (blank) pa.blanks.push(blank);
+      else warnings.push(`Dropped an invalid blank on page ${pageNo}.`);
+    }
+    if (!isPageEmpty(pa)) doc.pages[String(pageNo)] = pa;
   }
 
   return { doc, warnings };
@@ -261,6 +288,7 @@ function parseText(t: unknown): TextBox | null {
   if (typeof t.areaId === 'string') tb.areaId = t.areaId;
   if (isNum(t.lineIndex)) tb.lineIndex = Math.max(0, Math.round(t.lineIndex));
   if (typeof t.markId === 'string') tb.markId = t.markId;
+  if (typeof t.blankId === 'string') tb.blankId = t.blankId;
   return tb;
 }
 
@@ -283,6 +311,11 @@ function parseMark(m: unknown): Mark | null {
   if (!isObj(m) || typeof m.id !== 'string' || !isNum(m.x) || !isNum(m.y)) return null;
   if (m.kind !== 'check' && m.kind !== 'cross') return null;
   return { id: m.id, kind: m.kind, x: m.x, y: m.y, size: num(m.size, 14, 4, 96) };
+}
+
+function parseBlank(b: unknown): Blank | null {
+  if (!isObj(b) || typeof b.id !== 'string' || !isNum(b.x) || !isNum(b.y)) return null;
+  return { id: b.id, x: b.x, y: b.y };
 }
 
 type Obj = Record<string, unknown>;

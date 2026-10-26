@@ -775,3 +775,92 @@ body.dragging-resize * {
 .session.mode-check .ann-text:not(.correction):hover {
   outline-color: rgba(30, 158, 58, 0.5);
 }
+
+/* ---- blanks ---- */
+.ann-blank {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed rgba(124, 58, 237, 0.75);
+  border-left: 2px solid rgba(124, 58, 237, 0.9);
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: 0 2px 2px 2px;
+  pointer-events: none;
+}
+/* Fill-order number, as a tab above the marker's left edge. */
+.ann-blank-no {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  color: #fff;
+  background: rgba(124, 58, 237, 0.9);
+  border-radius: 3px 3px 0 0;
+  font-weight: 600;
+  white-space: nowrap;
+  user-select: none;
+}
+.ann-blank.filled {
+  display: none;
+}
+.ann-blank.selected {
+  border-style: solid;
+  border-width: 2px;
+  background: rgba(124, 58, 237, 0.18);
+}
+.session.mode-text .ann-blank {
+  pointer-events: auto;
+  cursor: text;
+}
+.session.mode-text .ann-blank:hover {
+  background: rgba(124, 58, 237, 0.16);
+}
+.session.mode-check .ann-blank,
+.session.mode-area .ann-blank {
+  opacity: 0.4;
+}
+
+/* Blanks mode: blanks are interactive; text boxes and marks are inert and dimmed. */
+.session.mode-blank .page-overlay {
+  cursor: crosshair;
+}
+.session.mode-blank .ann-blank {
+  pointer-events: auto;
+  cursor: move;
+}
+.session.mode-blank .ann-blank.filled {
+  display: block;
+  opacity: 0.45;
+}
+.session.mode-blank .ann-text,
+.session.mode-blank .ann-mark {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ---- select mode ---- */
+.session.mode-select .page-overlay {
+  cursor: default;
+}
+.session.mode-select .ann-text,
+.session.mode-select .ann-mark,
+.session.mode-select .ann-blank {
+  pointer-events: auto;
+  cursor: move;
+}
+.session.mode-select .ann-text > .ann-grip,
+.session.mode-select .ann-text > .ann-resize {
+  display: none;
+}
+.session.mode-select .ann-mark.selected {
+  outline: 1px solid rgba(37, 99, 235, 0.8);
+  outline-offset: 1px;
+}
+.select-band {
+  position: absolute;
+  border: 1px solid rgba(37, 99, 235, 0.8);
+  background: rgba(37, 99, 235, 0.1);
+  pointer-events: none;
+  z-index: 4;
+}

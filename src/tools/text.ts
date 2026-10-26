@@ -1,9 +1,11 @@
 // Text mode: click to type, edit, drag (grip or Alt+drag), resize width, delete.
+// Clicks on or near a blank snap to it; Tab walks blanks in fill order.
 
 import { adjacentRowTop, areaAt, boxTopForRow, readingOrder, rowIndexAt, rowSpacing } from '../model/areas';
+import { adjacentBlank, boxForBlank, firstEmptyBlank, nearestBlank } from '../model/blanks';
 import { pdfToScreen, screenToPdf } from '../model/coords';
 import { createOp, deleteOp, findEntity, getPage, newId, updateOp } from '../model/history';
-import type { AnswerArea, TextBox } from '../model/schema';
+import type { AnswerArea, Blank, TextBox } from '../model/schema';
 import type { Store } from '../model/store';
 import { boxTopForClick, LINE_HEIGHT, roundPt } from '../model/text';
 import { applyTextStyle, displayText, type AnnotationLayer, type PageContext, type Tool } from '../ui/annotations';
@@ -93,6 +95,15 @@ export class TextTool implements Tool {
       return;
     }
 
+    // On or near a blank: type into it.
+    const blank = this.blankAt(e, ctx);
+    if (blank) {
+      e.preventDefault();
+      this.finishEditing();
+      this.enterBlank(ctx, blank);
+      return;
+    }
+
     // Empty space on the page.
     e.preventDefault();
     if (this.editing) {
@@ -108,6 +119,15 @@ export class TextTool implements Tool {
 
   private box(page: number, id: string): TextBox | undefined {
     return findEntity(this.store.doc, page, 'texts', id);
+  }
+
+  /** The blank under the pointer, or the nearest one within magnet range. */
+  private blankAt(e: PointerEvent, ctx: PageContext): Blank | undefined {
+    const blanks = getPage(this.store.doc, ctx.view.pageNo)?.blanks ?? [];
+    const node = (e.target as HTMLElement).closest<HTMLElement>('.ann-blank');
+    if (node) return blanks.find((b) => b.id === node.dataset.id);
+    const rect = ctx.view.overlay.getBoundingClientRect();
+    return nearestBlank(blanks, ctx.vp, this.store.doc.settings.defaultFontSize, e.clientX - rect.left, e.clientY - rect.top);
   }
 
   private createAt(e: PointerEvent, ctx: PageContext): void {
@@ -133,7 +153,7 @@ export class TextTool implements Tool {
     ctx: PageContext,
     p: {
       x: number; y: number; fontSize: number; color: string;
-      areaId?: string; lineIndex?: number; kind?: TextBox['kind']; markId?: string;
+      areaId?: string; lineIndex?: number; kind?: TextBox['kind']; markId?: string; blankId?: string;
     },
     key?: string,
   ): void {
@@ -152,6 +172,7 @@ export class TextTool implements Tool {
       tb.lineIndex = p.lineIndex;
     }
     if (p.markId) tb.markId = p.markId;
+    if (p.blankId) tb.blankId = p.blankId;
     const k = key ?? `text:${tb.id}:${++this.seq}`;
     this.store.change(tb.kind === 'correction' ? 'Add correction' : 'Add text', [createOp(ctx.view.pageNo, 'texts', tb)], k);
     this.startEditing(ctx, tb.id, 0, k);
@@ -240,7 +261,7 @@ export class TextTool implements Tool {
         return;
       case 'Tab':
         e.preventDefault();
-        this.jumpToArea(e.shiftKey ? -1 : 1);
+        this.jump(e.shiftKey ? -1 : 1);
         return;
     }
   }
@@ -297,25 +318,54 @@ export class TextTool implements Tool {
     return texts.find((t) => t.id !== exceptId && Math.abs(t.y - top) < spacing / 2 && Math.abs(t.x - x) < ROW_X_TOLERANCE);
   }
 
-  /** Tab / Shift+Tab: first row of the next / previous answer area on the page. */
-  private jumpToArea(dir: 1 | -1): void {
+  /**
+   * Tab / Shift+Tab: in a blank, the next / previous blank in fill order;
+   * otherwise the first row of the next / previous answer area on the page,
+   * or else the first empty blank.
+   */
+  private jump(dir: 1 | -1): void {
     const ed = this.editing;
     if (!ed) return;
     const tb = this.box(ed.page, ed.id);
     if (!tb) return;
-    const areas = readingOrder(getPage(this.store.doc, ed.page)?.areas ?? []);
-    if (!areas.length) return;
+    const pa = getPage(this.store.doc, ed.page);
+    const blanks = pa?.blanks ?? [];
+    const ctx = ed.ctx;
+    if (tb.blankId && blanks.some((b) => b.id === tb.blankId)) {
+      const target = adjacentBlank(blanks, tb.blankId, dir);
+      if (!target) return;
+      this.finishEditing();
+      this.enterBlank(ctx, target);
+      return;
+    }
+    const areas = readingOrder(pa?.areas ?? []);
     let i = areas.findIndex((a) => a.id === tb.areaId);
     if (i >= 0) i += dir;
     else {
       // Not in an area: the first area below (or, backwards, above) the box.
       i = dir > 0 ? areas.findIndex((a) => a.y < tb.y) : findLastIndex(areas, (a) => a.y - a.height > tb.y);
     }
-    const target = areas[i];
-    if (!target) return;
-    const ctx = ed.ctx;
+    const area = areas[i];
+    if (area) {
+      this.finishEditing();
+      this.enterArea(ctx, area);
+      return;
+    }
+    const blank = dir > 0 ? firstEmptyBlank(blanks, pa?.texts ?? []) : undefined;
+    if (!blank) return;
     this.finishEditing();
-    this.enterArea(ctx, target);
+    this.enterBlank(ctx, blank);
+  }
+
+  /** Starts typing in a blank: its existing box (caret at the end) or a new one at the blank. */
+  enterBlank(ctx: PageContext, blank: Blank): void {
+    const existing = boxForBlank(getPage(this.store.doc, ctx.view.pageNo)?.texts ?? [], blank.id);
+    if (existing) {
+      this.startEditing(ctx, existing.id, null);
+      return;
+    }
+    const { defaultFontSize: fontSize, defaultColor: color } = this.store.doc.settings;
+    this.createBox(ctx, { x: blank.x, y: boxTopForClick(blank.y, fontSize), fontSize, color, blankId: blank.id });
   }
 
   /** Starts typing in the first row of `area` (existing box there, or a new one at its left edge). */

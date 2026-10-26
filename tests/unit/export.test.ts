@@ -72,8 +72,9 @@ describe('buildAnnotatedPdf', () => {
       ],
       areas: [{ id: 'z', x: 0, y: 800, width: 100, height: 50, lines: 2, fontSize: 11 }],
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
+      blanks: [],
     };
-    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [] };
+    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [], blanks: [] };
     const geoms: PageGeom[] = [
       { view: [0, 0, 595, 842], rotation: 0 },
       { view: [0, 0, 595, 842], rotation: 90 },
@@ -101,12 +102,13 @@ describe('buildAnnotatedPdf', () => {
     expect(p2[0].angle).toBe(90);
   });
 
-  it('leaves out marks and corrections when asked, and never areas', async () => {
+  it('leaves out marks and corrections when asked, and never areas or blanks', async () => {
     const doc = createEmptyDoc('Book.pdf', 2, null);
     doc.pages['1'] = {
       texts: [text('a', { text: 'Antwort' }), text('b', { kind: 'correction', text: 'Korrektur', markId: 'm' })],
       areas: [{ id: 'z', x: 0, y: 800, width: 100, height: 50, lines: 2, fontSize: 11 }],
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
+      blanks: [{ id: 'k', x: 120, y: 600 }],
     };
     const geoms: PageGeom[] = [{ view: [0, 0, 595, 842], rotation: 0 }, { view: [0, 0, 595, 842], rotation: 90 }];
     const without = await buildAnnotatedPdf({

@@ -2,10 +2,11 @@
 // routes pointer input on pages to the active tool.
 
 import { firstRowHeight, rowSpacing } from '../model/areas';
+import { blankRect, boxForBlank } from '../model/blanks';
 import { pdfToScreen, type Viewport } from '../model/coords';
 import { getPage } from '../model/history';
 import { MARK_COLORS, MARK_PATHS, MARK_STROKE } from '../model/marks';
-import type { AnswerArea, Mark, TextBox } from '../model/schema';
+import type { AnswerArea, Blank, Mark, TextBox } from '../model/schema';
 import type { Store } from '../model/store';
 import { LINE_HEIGHT, TEXT_FONT_FAMILY } from '../model/text';
 import type { EditorState } from '../tools/editor';
@@ -42,7 +43,8 @@ export class AnnotationLayer implements PageDecorator {
     this.disposers.push(
       store.subscribe((c) => {
         if (c.kind === 'view') return;
-        this.renderAll(c.kind === 'content' ? c.pages : undefined);
+        // Settings changes (no pages) can resize blanks everywhere.
+        this.renderAll(c.kind === 'content' && c.pages?.length ? c.pages : undefined);
       }),
       editor.subscribe(() => this.renderAll()),
     );
@@ -120,6 +122,7 @@ export class AnnotationLayer implements PageDecorator {
       });
     }
     for (const n of existing.values()) n.remove();
+    this.renderBlanks(view, pa?.blanks ?? [], texts, ctx.vp);
     this.renderMarks(view, pa?.marks ?? [], ctx.vp);
     this.tool?.afterRender?.(ctx);
   }
@@ -141,7 +144,34 @@ export class AnnotationLayer implements PageDecorator {
       s.left = `${sx - px / 2}px`;
       s.top = `${sy - px / 2}px`;
       s.width = s.height = `${px}px`;
+      node.classList.toggle('selected', this.editor.isSelected(m.id));
     }
+    for (const n of existing.values()) n.remove();
+  }
+
+  /** Numbered markers in fill order; a blank with text in it is "filled" (hidden outside Blanks mode). */
+  private renderBlanks(view: PageView, blanks: Blank[], texts: TextBox[], vp: Viewport): void {
+    const existing = new Map<string, HTMLElement>();
+    for (const n of view.overlay.querySelectorAll<HTMLElement>(':scope > .ann-blank')) existing.set(n.dataset.id!, n);
+    const fontSize = this.store.doc.settings.defaultFontSize;
+    blanks.forEach((b, i) => {
+      let node = existing.get(b.id);
+      existing.delete(b.id);
+      if (!node) {
+        node = el('div', { class: 'ann-blank', 'data-id': b.id }, el('span', { class: 'ann-blank-no' }));
+        view.overlay.appendChild(node);
+      }
+      const r = blankRect(vp, b, fontSize);
+      const s = node.style;
+      s.left = `${r.left}px`;
+      s.top = `${r.top}px`;
+      s.width = `${r.width}px`;
+      s.height = `${r.height}px`;
+      const no = node.firstElementChild as HTMLElement;
+      if (no.textContent !== String(i + 1)) no.textContent = String(i + 1);
+      node.classList.toggle('filled', !!boxForBlank(texts, b.id));
+      node.classList.toggle('selected', this.editor.isSelected(b.id));
+    });
     for (const n of existing.values()) n.remove();
   }
 

@@ -39,8 +39,10 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
 };
 
 const MODES: { mode: Mode; label: string; title: string; enabled: boolean }[] = [
+  { mode: 'select', label: 'Select', title: 'Select mode: click or drag a rectangle to select, drag to move, Delete to remove (V)', enabled: true },
   { mode: 'text', label: 'Text', title: 'Text mode: click to type (T)', enabled: true },
   { mode: 'area', label: 'Area', title: 'Answer areas: drag a rectangle over the rows to fill (A)', enabled: true },
+  { mode: 'blank', label: 'Blanks', title: 'Blanks: click where each answer starts, in order; Tab then walks them (B)', enabled: true },
   { mode: 'check', label: 'Check', title: 'Check mode: left click ✓, right click ✗ + correction (C)', enabled: true },
 ];
 
