@@ -1,4 +1,4 @@
-// Select mode: pick text boxes, ✓/✗ marks, blanks and underlines to move or delete them.
+// Select mode: pick text boxes, ✓/✗ marks, blanks, underlines and covers to move or delete them.
 // Click selects one item, Shift/Ctrl+click adds or removes it, dragging on
 // empty space selects everything the rectangle touches, dragging a selected
 // item moves the whole selection. Delete removes it.
@@ -20,6 +20,8 @@ const ITEM_SELECTORS: [string, Collection][] = [
   ['.ann-mark', 'marks'],
   ['.ann-blank:not(.filled)', 'blanks'],
   ['.ann-underline', 'underlines'],
+  // Last: a cover lies under everything else, so items on it win.
+  ['.ann-cover[data-id]', 'covers'],
 ];
 
 function itemAt(target: HTMLElement): { node: HTMLElement; coll: Collection } | null {
@@ -169,7 +171,10 @@ export class SelectTool implements Tool {
         for (const n of overlay.querySelectorAll<HTMLElement>(`:scope > ${sel}`)) {
           // Rendered bounds (include rotation, e.g. diagonal lines), in overlay coordinates.
           const nr = n.getBoundingClientRect();
-          const intersects = nr.left - o.left < r && nr.right - o.left > l && nr.top - o.top < b && nr.bottom - o.top > t;
+          // Covers are large backgrounds: only taken when the rectangle encloses them.
+          const intersects = coll === 'covers'
+            ? nr.left - o.left >= l && nr.right - o.left <= r && nr.top - o.top >= t && nr.bottom - o.top <= b
+            : nr.left - o.left < r && nr.right - o.left > l && nr.top - o.top < b && nr.bottom - o.top > t;
           if (intersects && !base.some((s) => s.id === n.dataset.id)) hits.push({ page, coll, id: n.dataset.id! });
         }
       }

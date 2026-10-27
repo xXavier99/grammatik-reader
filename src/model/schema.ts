@@ -82,20 +82,33 @@ export interface Underline {
   color: string;
 }
 
+/**
+ * A white rectangle hiding part of the printed page, drawn below every other
+ * annotation so answers can be written on it. (x, y) is the top-left corner.
+ */
+export interface Cover {
+  id: Id;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PageAnnotations {
   texts: TextBox[];
   areas: AnswerArea[];
   marks: Mark[];
   blanks: Blank[];
   underlines: Underline[];
+  covers: Cover[];
 }
 
 export function emptyPage(): PageAnnotations {
-  return { texts: [], areas: [], marks: [], blanks: [], underlines: [] };
+  return { texts: [], areas: [], marks: [], blanks: [], underlines: [], covers: [] };
 }
 
 export function isPageEmpty(pa: PageAnnotations): boolean {
-  return !pa.texts.length && !pa.areas.length && !pa.marks.length && !pa.blanks.length && !pa.underlines.length;
+  return !pa.texts.length && !pa.areas.length && !pa.marks.length && !pa.blanks.length && !pa.underlines.length && !pa.covers.length;
 }
 
 /** Exercise pages fromPage..toPage (1-based, inclusive) → answer page. */
@@ -292,6 +305,11 @@ export function migrate(raw: unknown, pdfName: string, pageCount: number, finger
       if (line) pa.underlines.push(line);
       else warnings.push(`Dropped an invalid underline on page ${pageNo}.`);
     }
+    for (const c of arr(value.covers)) {
+      const cover = parseCover(c);
+      if (cover) pa.covers.push(cover);
+      else warnings.push(`Dropped an invalid cover on page ${pageNo}.`);
+    }
     if (!isPageEmpty(pa)) doc.pages[String(pageNo)] = pa;
   }
 
@@ -348,6 +366,13 @@ function parseUnderline(u: unknown): Underline | null {
   if (!isNum(u.x) || !isNum(u.y) || !isNum(u.dx) || !isNum(u.dy)) return null;
   if (u.dx === 0 && u.dy === 0) return null;
   return { id: u.id, x: u.x, y: u.y, dx: u.dx, dy: u.dy, width: num(u.width, UNDERLINE_WIDTH, 0.25, 10), color: color(u.color, '#1a4fd6') };
+}
+
+function parseCover(c: unknown): Cover | null {
+  if (!isObj(c) || typeof c.id !== 'string') return null;
+  if (!isNum(c.x) || !isNum(c.y) || !isNum(c.width) || !isNum(c.height)) return null;
+  if (c.width <= 0 || c.height <= 0) return null;
+  return { id: c.id, x: c.x, y: c.y, width: c.width, height: c.height };
 }
 
 type Obj = Record<string, unknown>;

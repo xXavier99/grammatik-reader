@@ -61,6 +61,24 @@ describe('migrate', () => {
     expect(warnings).toHaveLength(4);
   });
 
+  it('keeps covers, drops degenerate ones, and reads files written before covers existed', () => {
+    const { doc, warnings } = load({
+      version: 1,
+      pages: {
+        '3': {
+          covers: [
+            { id: 'w1', x: 10, y: 700, width: 120, height: 30 },
+            { id: 'w2', x: 10, y: 700, width: 0, height: 30 },
+          ],
+        },
+        '4': { texts: [{ id: 't', x: 1, y: 2, text: 'alt' }] },
+      },
+    });
+    expect(doc.pages['3'].covers).toEqual([{ id: 'w1', x: 10, y: 700, width: 120, height: 30 }]);
+    expect(doc.pages['4'].covers).toEqual([]);
+    expect(warnings).toEqual(['Dropped an invalid cover on page 3.']);
+  });
+
   it('clamps view state and mapping pages to the document', () => {
     const { doc } = load({
       version: 1,

@@ -908,3 +908,53 @@ body.dragging-resize * {
 .session.mode-line .ann-blank {
   pointer-events: none;
 }
+
+/* ---- covers ---- */
+/* White rectangles hiding the printed page; first in the overlay, so everything else is on top. */
+.ann-cover {
+  position: absolute;
+  box-sizing: border-box;
+  background: #fff;
+  pointer-events: none;
+}
+.ann-cover-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: #fff;
+  border: 1.5px solid rgb(37, 99, 235);
+  border-radius: 2px;
+  display: none;
+}
+.ann-cover.drawing {
+  outline: 1px dashed rgba(37, 99, 235, 0.8);
+}
+.session.mode-cover .page-overlay {
+  cursor: crosshair;
+}
+/* Cover mode: covers show their outline and are interactive; everything else is inert. */
+.session.mode-cover .ann-cover {
+  pointer-events: auto;
+  cursor: move;
+  outline: 1px dashed rgba(100, 116, 139, 0.9);
+}
+.session.mode-cover .ann-cover.selected {
+  outline: 1.5px solid rgba(37, 99, 235, 0.9);
+}
+.session.mode-cover .ann-cover.selected > .ann-cover-handle {
+  display: block;
+}
+.session.mode-cover .ann-text,
+.session.mode-cover .ann-mark,
+.session.mode-cover .ann-blank,
+.session.mode-cover .ann-underline {
+  pointer-events: none;
+}
+.session.mode-select .ann-cover {
+  pointer-events: auto;
+  cursor: move;
+}
+.session.mode-select .ann-cover.selected {
+  outline: 1px dashed rgba(37, 99, 235, 0.8);
+}

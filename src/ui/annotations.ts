@@ -6,7 +6,7 @@ import { blankRect, boxForBlank } from '../model/blanks';
 import { pdfToScreen, type Viewport } from '../model/coords';
 import { getPage } from '../model/history';
 import { MARK_COLORS, MARK_PATHS, MARK_STROKE } from '../model/marks';
-import type { AnswerArea, Blank, Mark, TextBox, Underline } from '../model/schema';
+import type { AnswerArea, Blank, Cover, Mark, TextBox, Underline } from '../model/schema';
 import type { Store } from '../model/store';
 import { LINE_HEIGHT, TEXT_FONT_FAMILY } from '../model/text';
 import type { EditorState } from '../tools/editor';
@@ -104,7 +104,8 @@ export class AnnotationLayer implements PageDecorator {
   renderPage(pane: PdfPane, view: PageView): void {
     const ctx = this.ctx(pane, view);
     const pa = getPage(this.store.doc, view.pageNo);
-    this.renderAreas(view, pa?.areas ?? [], ctx.vp);
+    const lastCover = this.renderCovers(view, pa?.covers ?? [], ctx.vp);
+    this.renderAreas(view, pa?.areas ?? [], ctx.vp, lastCover);
     const texts = pa?.texts ?? [];
     const existing = new Map<string, HTMLElement>();
     for (const n of view.overlay.querySelectorAll<HTMLElement>(':scope > .ann-text[data-id]')) existing.set(n.dataset.id!, n);
@@ -192,21 +193,39 @@ export class AnnotationLayer implements PageDecorator {
     for (const n of existing.values()) n.remove();
   }
 
-  private renderAreas(view: PageView, areas: AnswerArea[], vp: Viewport): void {
+  /** Covers come first in the overlay, below everything else. Returns the last cover node. */
+  private renderCovers(view: PageView, covers: Cover[], vp: Viewport): HTMLElement | null {
+    const existing = new Map<string, HTMLElement>();
+    for (const n of view.overlay.querySelectorAll<HTMLElement>(':scope > .ann-cover[data-id]')) existing.set(n.dataset.id!, n);
+    let prev: HTMLElement | null = null;
+    for (const c of covers) {
+      let node = existing.get(c.id);
+      existing.delete(c.id);
+      if (!node) node = createCoverNode(c.id);
+      prev = placeInOrder(view.overlay, node, prev);
+      const r = screenRect(vp, c.x, c.y, c.width, c.height);
+      const s = node.style;
+      s.left = `${r.left}px`;
+      s.top = `${r.top}px`;
+      s.width = `${r.width}px`;
+      s.height = `${r.height}px`;
+      node.classList.toggle('selected', this.editor.isSelected(c.id));
+    }
+    for (const n of existing.values()) n.remove();
+    return prev;
+  }
+
+  /** Areas follow the covers (below text boxes), in document order so the last drawn is on top. */
+  private renderAreas(view: PageView, areas: AnswerArea[], vp: Viewport, after: HTMLElement | null): void {
     const existing = new Map<string, HTMLElement>();
     for (const n of view.overlay.querySelectorAll<HTMLElement>(':scope > .ann-area')) existing.set(n.dataset.id!, n);
-    // Areas come first in the overlay (below text boxes), in document order so
-    // the last drawn is on top. Nodes are only moved when out of place, since
-    // moving a node would drop an active pointer capture.
-    let prev: HTMLElement | null = null;
+    let prev = after;
     for (const area of areas) {
       let node = existing.get(area.id);
       existing.delete(area.id);
       if (!node) node = createAreaNode(area.id);
-      const expected: ChildNode | null = prev ? prev.nextSibling : view.overlay.firstChild;
-      if (expected !== node) view.overlay.insertBefore(node, expected);
+      prev = placeInOrder(view.overlay, node, prev);
       updateAreaNode(node, area, vp, this.editor.isSelected(area.id));
-      prev = node;
     }
     for (const n of existing.values()) n.remove();
   }
@@ -263,6 +282,16 @@ export function placeUnderline(node: HTMLElement, vp: Viewport, u: Pick<Underlin
   bar.background = u.color;
 }
 
+/**
+ * Puts `node` right after `prev` (or first in `parent`). Nodes are only moved
+ * when out of place, since moving a node would drop an active pointer capture.
+ */
+function placeInOrder(parent: HTMLElement, node: HTMLElement, prev: HTMLElement | null): HTMLElement {
+  const expected: ChildNode | null = prev ? prev.nextSibling : parent.firstChild;
+  if (expected !== node) parent.insertBefore(node, expected);
+  return node;
+}
+
 export const AREA_HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
 export type AreaHandle = (typeof AREA_HANDLES)[number];
 
@@ -272,6 +301,14 @@ function createAreaNode(id: string): HTMLElement {
     { class: 'ann-area', 'data-id': id },
     el('span', { class: 'ann-area-label' }),
     ...AREA_HANDLES.map((h) => el('span', { class: `ann-area-handle h-${h}`, 'data-handle': h })),
+  );
+}
+
+function createCoverNode(id: string): HTMLElement {
+  return el(
+    'div',
+    { class: 'ann-cover', 'data-id': id },
+    ...AREA_HANDLES.map((h) => el('span', { class: `ann-cover-handle h-${h}`, 'data-handle': h })),
   );
 }
 

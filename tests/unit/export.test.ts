@@ -74,8 +74,9 @@ describe('buildAnnotatedPdf', () => {
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
       blanks: [],
       underlines: [],
+      covers: [],
     };
-    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [], blanks: [], underlines: [] };
+    doc.pages['2'] = { texts: [text('c', { x: 200, y: 300, text: 'gedreht' })], areas: [], marks: [], blanks: [], underlines: [], covers: [] };
     const geoms: PageGeom[] = [
       { view: [0, 0, 595, 842], rotation: 0 },
       { view: [0, 0, 595, 842], rotation: 90 },
@@ -111,6 +112,7 @@ describe('buildAnnotatedPdf', () => {
       marks: [{ id: 'm', kind: 'cross', x: 290, y: 494, size: 14 }],
       blanks: [{ id: 'k', x: 120, y: 600 }],
       underlines: [],
+      covers: [],
     };
     const geoms: PageGeom[] = [{ view: [0, 0, 595, 842], rotation: 0 }, { view: [0, 0, 595, 842], rotation: 90 }];
     const without = await buildAnnotatedPdf({
@@ -129,6 +131,7 @@ describe('buildAnnotatedPdf', () => {
     doc.pages['1'] = {
       texts: [], areas: [], marks: [], blanks: [],
       underlines: [{ id: 'u', x: 100, y: 600, dx: 150, dy: 0, width: 1.2, color: '#1a4fd6' }],
+      covers: [],
     };
     const bytes = await buildAnnotatedPdf({
       original: await source(), doc, geoms, fontBytes: font, baselineRatio: RATIO, options: { includeChecks: false },
@@ -139,6 +142,29 @@ describe('buildAnnotatedPdf', () => {
     // One stroke colour set and one stroked path: the underline.
     expect(ops.fnArray.filter((fn: number) => fn === pdfjs.OPS.setStrokeRGBColor)).toHaveLength(1);
     expect(ops.fnArray.filter((fn: number) => fn === pdfjs.OPS.stroke || fn === pdfjs.OPS.constructPath).length).toBeGreaterThan(0);
+    await pdf.destroy();
+  });
+
+  it('paints covers white, below the text written on them', async () => {
+    const geoms: PageGeom[] = [{ view: [0, 0, 595, 842], rotation: 0 }, { view: [0, 0, 595, 842], rotation: 90 }];
+    const doc = createEmptyDoc('Book.pdf', 2, null);
+    doc.pages['1'] = {
+      texts: [text('a', { x: 110, y: 590, text: 'Neu' })], areas: [], marks: [], blanks: [], underlines: [],
+      covers: [{ id: 'w', x: 100, y: 600, width: 200, height: 40 }],
+    };
+    const bytes = await buildAnnotatedPdf({
+      original: await source(), doc, geoms, fontBytes: font, baselineRatio: RATIO, options: { includeChecks: false },
+    });
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdf = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+    const ops = await (await pdf.getPage(1)).getOperatorList();
+    const fill = ops.fnArray.findIndex((fn: number) => fn === pdfjs.OPS.fill || fn === pdfjs.OPS.eoFill || fn === pdfjs.OPS.constructPath);
+    const show = ops.fnArray.lastIndexOf(pdfjs.OPS.showText);
+    expect(fill).toBeGreaterThanOrEqual(0);
+    expect(fill).toBeLessThan(show);
+    const white = ops.fnArray.findIndex((fn: number, i: number) => fn === pdfjs.OPS.setFillRGBColor && [...(ops.argsArray[i] ?? [])].join() === '255,255,255');
+    expect(white).toBeGreaterThanOrEqual(0);
+    expect(white).toBeLessThan(show);
     await pdf.destroy();
   });
 

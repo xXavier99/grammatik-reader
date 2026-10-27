@@ -163,7 +163,7 @@ export class AreaTool implements Tool {
 }
 
 /** New geometry after dragging `handle` by (dx, dy) PDF units. */
-export function resizeArea(a: AnswerArea, handle: AreaHandle | 'move', dx: number, dy: number): Pick<AnswerArea, 'x' | 'y' | 'width' | 'height'> {
+export function resizeArea(a: Pick<AnswerArea, 'x' | 'y' | 'width' | 'height'>, handle: AreaHandle | 'move', dx: number, dy: number): Pick<AnswerArea, 'x' | 'y' | 'width' | 'height'> {
   let { x, y, width, height } = a;
   if (handle === 'move') return { x: roundPt(x + dx), y: roundPt(y + dy), width, height };
   if (handle.includes('n')) {

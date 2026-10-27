@@ -3,7 +3,7 @@
 // Entities are treated as immutable values: a mutation stores full before /
 // after snapshots, so undo is just applying the mutation backwards.
 
-import { emptyPage, isPageEmpty, type AnswerArea, type Blank, type Mark, type PageAnnotations, type SidecarDoc, type TextBox, type Underline } from './schema';
+import { emptyPage, isPageEmpty, type AnswerArea, type Blank, type Cover, type Mark, type PageAnnotations, type SidecarDoc, type TextBox, type Underline } from './schema';
 
 export interface CollectionTypes {
   texts: TextBox;
@@ -11,6 +11,7 @@ export interface CollectionTypes {
   marks: Mark;
   blanks: Blank;
   underlines: Underline;
+  covers: Cover;
 }
 export type Collection = keyof CollectionTypes;
 export type Entity = CollectionTypes[Collection];

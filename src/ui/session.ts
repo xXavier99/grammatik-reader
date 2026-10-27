@@ -16,6 +16,7 @@ import { EditorState, type Mode } from '../tools/editor';
 import { AreaTool } from '../tools/area';
 import { BlankTool } from '../tools/blank';
 import { CheckTool } from '../tools/check';
+import { CoverTool } from '../tools/cover';
 import { SelectTool } from '../tools/select';
 import { TextTool } from '../tools/text';
 import { UnderlineTool } from '../tools/underline';
@@ -56,6 +57,7 @@ export class Session {
   private selectTool: SelectTool;
   private underlineTool: UnderlineTool;
   private lineTool: UnderlineTool;
+  private coverTool: CoverTool;
 
   static async open(handles: RecentBook, host: SessionHost): Promise<Session> {
     // Text boxes are measured on screen; make sure the real font is ready first.
@@ -106,6 +108,7 @@ export class Session {
     this.selectTool = new SelectTool(store, this.editor);
     this.underlineTool = new UnderlineTool(store, this.editor, 'underline');
     this.lineTool = new UnderlineTool(store, this.editor, 'line');
+    this.coverTool = new CoverTool(store, this.editor);
     this.layer.setTool(this.textTool);
 
     this.toolbar = new Toolbar({
@@ -324,7 +327,7 @@ export class Session {
     this.textTool.finishEditing();
     this.editor.setMode(m);
     const tools = {
-      select: this.selectTool, text: this.textTool, area: this.areaTool, blank: this.blankTool,
+      select: this.selectTool, text: this.textTool, area: this.areaTool, cover: this.coverTool, blank: this.blankTool,
       underline: this.underlineTool, line: this.lineTool, check: this.checkTool,
     };
     this.layer.setTool(tools[m]);
@@ -455,6 +458,7 @@ export class Session {
           case 'area': return this.areaTool.deleteSelection();
           case 'blank': return this.blankTool.deleteSelection();
           case 'select':
+          case 'cover':
           case 'underline':
           case 'line': return this.selectTool.deleteSelection();
           default: return this.textTool.deleteSelection();
@@ -480,6 +484,10 @@ export class Session {
       case 'l':
       case 'L':
         this.setMode('line');
+        return true;
+      case 'w':
+      case 'W':
+        this.setMode('cover');
         return true;
       case 't':
       case 'T':

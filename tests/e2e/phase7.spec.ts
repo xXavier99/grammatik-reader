@@ -212,3 +212,57 @@ test('line: drag from one point to another, Shift snaps, select and delete', asy
   await page.keyboard.press('Delete');
   await expect(lines).toHaveCount(1);
 });
+
+test('cover: white rectangle below everything, write on it, move, resize, delete', async ({ app: page }) => {
+  await openBook(page);
+  await page.keyboard.press('w');
+  await dragPage(page, [0.1, 0.1], [0.5, 0.2]);
+  // A plain click draws nothing.
+  await clickPage(page, 0.7, 0.7);
+  const covers = page.locator(`${p1} .ann-cover:not(.drawing)`);
+  await expect(covers).toHaveCount(1);
+  expect(await covers.evaluate((n) => getComputedStyle(n).backgroundColor)).toBe('rgb(255, 255, 255)');
+
+  // Text mode: clicking on the cover starts a text box on top of it.
+  await page.keyboard.press('t');
+  await clickPage(page, 0.2, 0.15);
+  await page.keyboard.type('Neu');
+  await page.keyboard.press('Escape');
+  await expect(boxes(page)).toHaveCount(1);
+  // The cover is first in the overlay, so the text box is drawn above it.
+  expect(await page.locator(`${p1} .page-overlay`).evaluate((o) => (o.firstElementChild as HTMLElement).className)).toContain('ann-cover');
+  const tb = (await boxes(page).boundingBox())!;
+  const topEl = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('.ann-text') !== null, [tb.x + 3, tb.y + tb.height / 2]);
+  expect(topEl).toBe(true);
+  await page.screenshot({ path: 'test-results/p7-cover.png' });
+
+  let doc = JSON.parse(JSON.stringify(await saved(page))) as { covers: { x: number; y: number; width: number; height: number }[] };
+  const H = 841.89;
+  const W = 595.28;
+  expect(doc.covers[0].x).toBeCloseTo(0.1 * W, 0);
+  expect(doc.covers[0].y).toBeCloseTo(H * 0.9, 0);
+  expect(doc.covers[0].width).toBeCloseTo(0.4 * W, 0);
+  expect(doc.covers[0].height).toBeCloseTo(0.1 * H, 0);
+
+  // Cover mode: drag moves it (the text stays), the corner handle resizes it.
+  await page.keyboard.press('w');
+  await dragPage(page, [0.45, 0.18], [0.55, 0.28]);
+  await expect(page.locator(`${p1} .ann-cover.selected`)).toHaveCount(1);
+  const handle = page.locator(`${p1} .ann-cover.selected .h-se`);
+  const hb = (await handle.boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + 40, hb.y + 30, { steps: 5 });
+  await page.mouse.up();
+  doc = (await saved(page)) as unknown as typeof doc;
+  expect(doc.covers[0].x).toBeCloseTo(0.2 * W, 0);
+  expect(doc.covers[0].width).toBeGreaterThan(0.4 * W + 10);
+  expect((await saved(page)).texts).toHaveLength(1);
+
+  // Delete removes only the cover; undo brings it back.
+  await page.keyboard.press('Delete');
+  await expect(covers).toHaveCount(0);
+  await expect(boxes(page)).toHaveCount(1);
+  await page.keyboard.press('Control+z');
+  await expect(covers).toHaveCount(1);
+});
