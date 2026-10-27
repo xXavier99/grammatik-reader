@@ -42,6 +42,13 @@ export interface PaneState {
 }
 
 const SETTLE_MS = 160;
+/** A single scroll step longer than the viewport counts as a jump (scrollbar drag, End key). */
+const JUMP_IDLE_MS = 120;
+/** Pages rendered into the cache beyond the mounted ones, in and against the scroll direction. */
+const PREFETCH_AHEAD = 3;
+const PREFETCH_BEHIND = 1;
+/** Resolution of the quick preview shown while a visible page renders. */
+const PREVIEW_FRACTION = 0.25;
 
 export class PdfPane {
   readonly el: HTMLDivElement;
@@ -59,6 +66,12 @@ export class PdfPane {
   private settling = false;
   private settleTimer: number | undefined;
   private rafPending = false;
+  private lastTop = 0;
+  private scrollDir = 1;
+  /** Set right after a jump: pages flown past get no renders until scrolling slows down. */
+  private jumping = false;
+  private jumpTimer: number | undefined;
+  private prefetches = new Map<string, AbortController>();
   private resizeObs: ResizeObserver;
   private disposers: (() => void)[] = [];
   /** Suppresses page-change events while we programmatically scroll. */
@@ -79,7 +92,7 @@ export class PdfPane {
     this.badge = el('div', { class: 'pane-badge' }, `p. ${initial.page}`);
     this.el = el('div', { class: 'pane', tabindex: '0', 'data-pane': name }, this.scroller, this.badge);
 
-    this.scroller.addEventListener('scroll', () => this.scheduleUpdate(), { passive: true });
+    this.scroller.addEventListener('scroll', () => this.onScroll(), { passive: true });
     this.scroller.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     this.el.addEventListener('pointerdown', () => this.cb.onFocus(this), { capture: true });
     this.el.addEventListener('focusin', () => this.cb.onFocus(this));
@@ -142,6 +155,8 @@ export class PdfPane {
     const box = this.layout.boxes[n - 1];
     if (!box) return;
     this.scroller.scrollTop = Math.max(0, box.top - PAGE_GAP / 2);
+    // Programmatic navigation renders the target at once; it is not a jump.
+    this.lastTop = this.scroller.scrollTop;
     this.setPage(n);
     this.update();
   }
@@ -242,6 +257,7 @@ export class PdfPane {
       this.scroller.scrollLeft = b.left + keep.fx * b.width - ax;
       this.scroller.scrollTop = b.top + keep.fy * b.height - ay;
     }
+    this.lastTop = this.scroller.scrollTop;
     this.update();
   }
 
@@ -254,6 +270,22 @@ export class PdfPane {
     if (index < 0) index = boxes.length - 1;
     const b = boxes[index];
     return { index, fx: (x - b.left) / b.width, fy: (y - b.top) / b.height };
+  }
+
+  private onScroll(): void {
+    const top = this.scroller.scrollTop;
+    const dy = top - this.lastTop;
+    this.lastTop = top;
+    if (dy) this.scrollDir = Math.sign(dy);
+    if (Math.abs(dy) > this.scroller.clientHeight) {
+      this.jumping = true;
+      clearTimeout(this.jumpTimer);
+      this.jumpTimer = window.setTimeout(() => {
+        this.jumping = false;
+        this.update();
+      }, JUMP_IDLE_MS);
+    }
+    this.scheduleUpdate();
   }
 
   private scheduleUpdate(): void {
@@ -283,7 +315,40 @@ export class PdfPane {
         this.ensureRendered(v, visible);
       }
     }
+    this.prefetch(near);
     if (this.started && boxes.length) this.setPage(dominantPage(boxes, top, h) + 1);
+  }
+
+  /** Renders the pages just outside `near` into the shared cache, so they appear at once when mounted. */
+  private prefetch(near: [number, number] | null): void {
+    const want = new Map<string, [number, number]>();
+    if (near && !this.jumping && !this.settling) {
+      const [ahead, behind] = this.scrollDir > 0 ? [PREFETCH_AHEAD, PREFETCH_BEHIND] : [PREFETCH_BEHIND, PREFETCH_AHEAD];
+      const pages: number[] = [];
+      for (let i = 1; i <= ahead; i++) pages.push(near[1] + 1 + i);
+      for (let i = 1; i <= behind; i++) pages.push(near[0] + 1 - i);
+      for (const pageNo of pages) {
+        if (pageNo < 1 || pageNo > this.book.pageCount) continue;
+        const scale = this.renderer.pixelScale(pageNo, this.cssScale);
+        want.set(`${pageNo}@${scale}`, [pageNo, scale]);
+      }
+    }
+    for (const [key, ac] of this.prefetches) {
+      if (!want.has(key)) {
+        ac.abort();
+        this.prefetches.delete(key);
+      }
+    }
+    const prio = Priority.Prefetch + (this.focused ? 0 : Priority.VisibleOtherPane);
+    for (const [key, [pageNo, scale]] of want) {
+      if (this.prefetches.has(key) || this.renderer.peek(pageNo, scale)) continue;
+      const ac = new AbortController();
+      this.prefetches.set(key, ac);
+      const done = () => {
+        if (this.prefetches.get(key) === ac) this.prefetches.delete(key);
+      };
+      this.renderer.render(pageNo, scale, prio, ac.signal).then(done, done);
+    }
   }
 
   private setPage(n: number): void {
@@ -337,10 +402,29 @@ export class PdfPane {
       this.blit(v, cached, target);
       return;
     }
+    if (!v.renderedScale) {
+      // Stretch whatever the cache holds (a thumbnail, another zoom level) until the real bitmap arrives.
+      const any = this.renderer.peekAny(v.pageNo);
+      if (any) this.blit(v, any.canvas, any.scale, false);
+    }
+    if (this.jumping) return;
+
     const ac = new AbortController();
     v.abort = ac;
     v.pendingScale = target;
-    const prio = (visible ? Priority.Visible : Priority.Nearby) + (this.focused ? 0 : Priority.VisibleOtherPane);
+    const otherPane = this.focused ? 0 : Priority.VisibleOtherPane;
+    const prio = (visible ? Priority.Visible : Priority.Nearby) + otherPane;
+    const preview = Math.round(target * PREVIEW_FRACTION * 1000) / 1000;
+    if (visible && v.renderedScale < preview) {
+      // Queued first at the same priority, so a blurry page shows well before the sharp one.
+      // pdf.js reuses the parsed page for the full render, so this costs little extra.
+      this.renderer.render(v.pageNo, preview, prio, ac.signal).then(
+        (src) => {
+          if (v.renderedScale < preview && this.views.get(v.pageNo) === v) this.blit(v, src, preview, false);
+        },
+        () => {},
+      );
+    }
     this.renderer.render(v.pageNo, target, prio, ac.signal).then(
       (src) => {
         if (v.abort === ac) v.abort = undefined;
@@ -357,12 +441,13 @@ export class PdfPane {
     );
   }
 
-  private blit(v: PageView, src: HTMLCanvasElement, scale: number): void {
+  /** `final` is false for stand-in bitmaps; the page stays `.loading` until the real one is drawn. */
+  private blit(v: PageView, src: HTMLCanvasElement, scale: number, final = true): void {
     v.canvas.width = src.width;
     v.canvas.height = src.height;
     v.canvas.getContext('2d')!.drawImage(src, 0, 0);
     v.renderedScale = scale;
-    v.el.classList.remove('loading');
+    if (final) v.el.classList.remove('loading');
   }
 
   focus(): void {
@@ -372,6 +457,9 @@ export class PdfPane {
   destroy(): void {
     this.resizeObs.disconnect();
     clearTimeout(this.settleTimer);
+    clearTimeout(this.jumpTimer);
+    for (const ac of this.prefetches.values()) ac.abort();
+    this.prefetches.clear();
     for (const v of [...this.views.values()]) this.unmount(v);
     for (const d of this.disposers) d();
     this.el.remove();

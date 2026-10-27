@@ -150,3 +150,22 @@ test('dark theme follows the system', async ({ app: page }) => {
   expect(bg).toBe('rgb(34, 37, 43)');
   await page.screenshot({ path: 'test-results/p1-dark.png' });
 });
+
+test('jumping far with the scrollbar renders the destination, not the pages flown past', async ({ app: page }) => {
+  await openBook(page);
+  await firstVisibleRendered(page);
+  const scroller = page.locator('.pane .pane-scroll');
+  // Simulate a scrollbar drag: a few large steps, one per frame.
+  for (const f of [0.2, 0.4, 0.6, 0.8]) {
+    await scroller.evaluate((e, f) => (e.scrollTop = e.scrollHeight * f), f);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  }
+  await expect(page.locator('.page-input')).toHaveValue(/^4\d$/);
+  const target = await page.locator('.page-input').inputValue();
+  await expect(page.locator(`.pane .page[data-page="${target}"]:not(.loading)`)).toBeVisible();
+  // Pages ahead are prefetched: scrolling on shows them without waiting for a render.
+  await page.waitForTimeout(1000);
+  await scroller.evaluate((e) => (e.scrollTop += e.clientHeight * 2));
+  const next = await page.locator('.page-input').inputValue();
+  await expect(page.locator(`.pane .page[data-page="${next}"]:not(.loading)`)).toBeVisible({ timeout: 300 });
+});

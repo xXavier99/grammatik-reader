@@ -8,6 +8,8 @@ export const Priority = {
   Visible: 0,
   VisibleOtherPane: 1,
   Nearby: 2,
+  /** Pages ahead of the viewport, rendered into the cache before they mount. */
+  Prefetch: 4,
   Thumbnail: 5,
 } as const;
 
@@ -67,6 +69,16 @@ export class Renderer {
       this.cache.set(key, c);
     }
     return c;
+  }
+
+  /** The largest cached bitmap of a page at any scale, to show while the real one renders. */
+  peekAny(pageNo: number): { canvas: HTMLCanvasElement; scale: number } | undefined {
+    let best: { canvas: HTMLCanvasElement; scale: number } | undefined;
+    const prefix = `${pageNo}@`;
+    for (const [k, c] of this.cache) {
+      if (k.startsWith(prefix) && (!best || c.width > best.canvas.width)) best = { canvas: c, scale: Number(k.slice(prefix.length)) };
+    }
+    return best;
   }
 
   /**
