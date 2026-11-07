@@ -5,3 +5,6 @@ test-results/
 playwright-report/
 *.local
 public/pdfjs/
+
+# The real workbook (copyrighted, ~90 MB), kept locally for testing.
+samples/Grammatik*.pdf

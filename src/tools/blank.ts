@@ -19,11 +19,14 @@ import type { EditorState } from './editor';
 import { deletionOps } from './select';
 
 const DRAG_THRESHOLD = 3;
-/** Resolution (px per PDF unit) the page is scanned at for gap lines. */
-const SCAN_SCALE = 3;
-/** Page area scanned around the rectangle (pt), to find the text next to and above each line. */
+// Sizes below are in nominal points: a page's short side counts as A4's
+// 595 pt, so scanned books with oversized pages work like normal ones.
+const A4_SHORT_SIDE = 595.28;
+/** Resolution (px per nominal pt) the page is scanned at for gap lines. */
+const SCAN_PX_PER_PT = 3;
+/** Page area scanned around the rectangle (nominal pt), to find the text next to and above each line. */
 const SCAN_MARGIN_PT = 25;
-/** A detected line this close (pt) to an existing blank already has one. */
+/** A detected line this close (nominal pt) to an existing blank already has one. */
 const DUPLICATE_PT = 6;
 
 export class BlankTool implements Tool {
@@ -97,20 +100,24 @@ export class BlankTool implements Tool {
   /** Places a blank on each gap line in `sel` (page-local CSS px) that has none yet. */
   private async placeOnGaps(ctx: PageContext, sel: PixelRect): Promise<void> {
     const page = ctx.view.pageNo;
+    // PDF units per nominal pt.
+    const unit = Math.min(ctx.vp.width, ctx.vp.height) / ctx.vp.scale / A4_SHORT_SIDE;
+    const scanScale = SCAN_PX_PER_PT / unit;
     const cached = this.renderer.peekAny(page);
-    const { canvas, scale } = cached && cached.scale >= SCAN_SCALE * 0.75
+    const { canvas, scale } = cached && cached.scale >= scanScale * 0.75
       ? cached
-      : { canvas: await this.renderer.render(page, SCAN_SCALE, Priority.Visible), scale: SCAN_SCALE };
+      : { canvas: await this.renderer.render(page, scanScale, Priority.Visible), scale: scanScale };
     // Canvas pixels are the page viewport at `scale` instead of ctx.vp.scale.
     const k = scale / ctx.vp.scale;
-    const margin = SCAN_MARGIN_PT * scale;
+    const pxPerPt = scale * unit;
+    const margin = SCAN_MARGIN_PT * pxPerPt;
     const left = Math.max(0, Math.floor(sel.left * k - margin));
     const top = Math.max(0, Math.floor(sel.top * k - margin));
     const right = Math.min(canvas.width, Math.ceil(sel.right * k + margin));
     const bottom = Math.min(canvas.height, Math.ceil(sel.bottom * k + margin));
     if (right <= left || bottom <= top) return;
     const img = canvas.getContext('2d')!.getImageData(left, top, right - left, bottom - top);
-    const gaps = detectGaps(img, scale, {
+    const gaps = detectGaps(img, pxPerPt, {
       left: sel.left * k - left, top: sel.top * k - top, right: sel.right * k - left, bottom: sel.bottom * k - top,
     });
 
@@ -118,7 +125,7 @@ export class BlankTool implements Tool {
     const ops: Mutation[] = [];
     for (const g of gaps) {
       const [x, y] = screenToPdf(ctx.vp, (g.x + left) / k, (g.y + top) / k);
-      if (existing.some((b) => Math.abs(b.x - x) < DUPLICATE_PT && Math.abs(b.y - y) < DUPLICATE_PT)) continue;
+      if (existing.some((b) => Math.abs(b.x - x) < DUPLICATE_PT * unit && Math.abs(b.y - y) < DUPLICATE_PT * unit)) continue;
       ops.push(createOp(page, 'blanks', { id: newId('b'), x: roundPt(x), y: roundPt(y) }));
     }
     if (ops.length) this.store.change(ops.length === 1 ? 'Add blank' : `Add ${ops.length} blanks`, ops);
