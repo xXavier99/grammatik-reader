@@ -39,4 +39,4 @@ Page annotations are six collections: `texts`, `areas`, `marks`, `blanks`, `unde
 
 **Export.** `export/exportPdf.ts` uses pdf-lib with the bundled Noto Sans (`src/assets/fonts`). `export/layout.ts` reproduces the browser's text wrapping (`pre-wrap`, `LINE_HEIGHT` from `model/text.ts`), so exported text matches the screen. If you change on-screen text layout, change export layout too, and the reverse.
 
-Pure logic (coords, areas/row snapping, history, schema, answer key, export layout) lives in `src/model` and `src/export`, and Vitest covers it in a node environment. The e2e tests (`tests/e2e/fixtures.ts`) stub the native file pickers with Origin Private File System handles, so the real File System Access code paths run without dialogs.
+Pure logic (coords, areas/row snapping, history, schema, answer key, gap-line detection for blanks in `model/blankDetect.ts`, export layout) lives in `src/model` and `src/export`, and Vitest covers it in a node environment. The e2e tests (`tests/e2e/fixtures.ts`) stub the native file pickers with Origin Private File System handles, so the real File System Access code paths run without dialogs.

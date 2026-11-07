@@ -104,7 +104,7 @@ export class Session {
       this.textTool.enterArea(ctx, area);
     });
     this.checkTool = new CheckTool(store, this.textTool);
-    this.blankTool = new BlankTool(store, this.editor);
+    this.blankTool = new BlankTool(store, this.editor, this.renderer);
     this.selectTool = new SelectTool(store, this.editor);
     this.underlineTool = new UnderlineTool(store, this.editor, 'underline');
     this.lineTool = new UnderlineTool(store, this.editor, 'line');

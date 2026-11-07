@@ -93,6 +93,39 @@ test('blanks: place in order, Tab through them, magnet click', async ({ app: pag
   expect(pg.texts.find((t) => t.text === 'vier')?.blankId).toBeUndefined();
 });
 
+test('blanks: dragging a rectangle places a blank on each gap line in it', async ({ app: page }) => {
+  await openBook(page);
+  await page.keyboard.press('b');
+
+  // Exercise lines 1–3 of page 1: "Ich ______ heute nach Hause." (the long
+  // answer line at the right is outside the rectangle).
+  const H = 841.89;
+  const lineY = [681.89, 657.89, 633.89];
+  const scan = () => dragPage(page, [70 / 595.28, (H - 695) / H], [280 / 595.28, (H - 625) / H]);
+  await scan();
+  await expect(visibleBlanks(page)).toHaveCount(3);
+  let pg = await saved(page);
+  pg.blanks.forEach((b, i) => {
+    // Left end of the underscores, a little above the baseline.
+    expect(b.x).toBeGreaterThan(98);
+    expect(b.x).toBeLessThan(106);
+    expect(b.y).toBeGreaterThan(lineY[i]);
+    expect(b.y).toBeLessThan(lineY[i] + 8);
+  });
+
+  // One undo step removes them all.
+  await page.keyboard.press('Control+z');
+  await expect(visibleBlanks(page)).toHaveCount(0);
+
+  // Scanning the same area twice does not stack blanks.
+  await scan();
+  await expect(visibleBlanks(page)).toHaveCount(3);
+  await scan();
+  await expect(page.locator('.toast')).toContainText('already has a blank');
+  pg = await saved(page);
+  expect(pg.blanks).toHaveLength(3);
+});
+
 test('select mode: rectangle select, move, delete, undo', async ({ app: page }) => {
   await openBook(page);
   for (const [fy, text] of [[0.2, 'eins'], [0.25, 'zwei'], [0.4, 'drei']] as const) {

@@ -958,3 +958,16 @@ body.dragging-resize * {
 .session.mode-select .ann-cover.selected {
   outline: 1px dashed rgba(37, 99, 235, 0.8);
 }
+
+/* Blanks mode: rectangle dragged to place blanks on the gap lines inside it. */
+.blank-scan {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px dashed rgba(124, 58, 237, 0.85);
+  background: rgba(124, 58, 237, 0.06);
+  pointer-events: none;
+}
+.blank-scan.busy {
+  cursor: progress;
+  background: rgba(124, 58, 237, 0.14);
+}
