@@ -23,8 +23,8 @@ export interface DetectedGap {
   y: number;
 }
 
-/** Luminance below this counts as ink (grey lines included, paper excluded). */
-const INK_LUMA = 170;
+/** Luminance below this counts as ink: light grey hairlines included, white paper excluded. */
+const INK_LUMA = 215;
 /** Gap lines are at least this long (pt). Letters never have horizontal strokes this long. */
 const MIN_LENGTH_PT = 12;
 /** Thicker than this (pt) is a filled box or a rule, not a gap line. */

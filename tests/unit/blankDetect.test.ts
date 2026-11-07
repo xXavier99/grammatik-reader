@@ -56,6 +56,16 @@ describe('gap line detection', () => {
     expect(detectGaps(img, S, { left: 0, top: 100, right: 200, bottom: 200 }).map((g) => g.x)).toEqual([50]);
   });
 
+  it('finds faint grey hairlines spread over several pixel rows', () => {
+    const img = blankImage(400, 100);
+    text(img, 20, 98, 40, 60);
+    // As rendered from a book: a light grey line, anti-aliased over three rows.
+    fill(img, 100, 61, 143, 62, 185);
+    fill(img, 100, 62, 143, 63, 153);
+    fill(img, 100, 63, 143, 64, 200);
+    expect(detectGaps(img, S, all)).toEqual([{ x: 100, y: 50.5 }]);
+  });
+
   it('uses the typical text height for a line with no text around it', () => {
     const img = blankImage(600, 200);
     text(img, 20, 98, 40, 60);
