@@ -28,6 +28,9 @@ const SCAN_PX_PER_PT = 3;
 const SCAN_MARGIN_PT = 25;
 /** A detected line this close (nominal pt) to an existing blank already has one. */
 const DUPLICATE_PT = 6;
+/** Detected blanks start this far (nominal pt, about two spaces of 11 pt text) right of the line's left end,
+ *  so typed answers do not touch the word before the gap. */
+const GAP_INSET_PT = 6;
 
 export class BlankTool implements Tool {
   private seq = 0;
@@ -124,8 +127,11 @@ export class BlankTool implements Tool {
     const existing = getPage(this.store.doc, page)?.blanks ?? [];
     const ops: Mutation[] = [];
     for (const g of gaps) {
-      const [x, y] = screenToPdf(ctx.vp, (g.x + left) / k, (g.y + top) / k);
-      if (existing.some((b) => Math.abs(b.x - x) < DUPLICATE_PT * unit && Math.abs(b.y - y) < DUPLICATE_PT * unit)) continue;
+      const [lineX, y] = screenToPdf(ctx.vp, (g.x + left) / k, (g.y + top) / k);
+      const x = lineX + GAP_INSET_PT * unit;
+      // Blanks anywhere from the line's start to the inset position count (older ones sit at the start).
+      const dup = DUPLICATE_PT * unit;
+      if (existing.some((b) => b.x > lineX - dup && b.x < x + dup && Math.abs(b.y - y) < dup)) continue;
       ops.push(createOp(page, 'blanks', { id: newId('b'), x: roundPt(x), y: roundPt(y) }));
     }
     if (ops.length) this.store.change(ops.length === 1 ? 'Add blank' : `Add ${ops.length} blanks`, ops);

@@ -106,9 +106,9 @@ test('blanks: dragging a rectangle places a blank on each gap line in it', async
   await expect(visibleBlanks(page)).toHaveCount(3);
   let pg = await saved(page);
   pg.blanks.forEach((b, i) => {
-    // Left end of the underscores, a little above the baseline.
-    expect(b.x).toBeGreaterThan(98);
-    expect(b.x).toBeLessThan(106);
+    // About two spaces right of the underscores' left end, a little above the baseline.
+    expect(b.x).toBeGreaterThan(104);
+    expect(b.x).toBeLessThan(112);
     expect(b.y).toBeGreaterThan(lineY[i]);
     expect(b.y).toBeLessThan(lineY[i] + 8);
   });
